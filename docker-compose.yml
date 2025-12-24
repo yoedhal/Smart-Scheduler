@@ -1,0 +1,6 @@
+services:
+  api:
+    build:
+      context: ./backend/api
+    ports:
+      - "8000:8000"
