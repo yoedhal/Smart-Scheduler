@@ -1,0 +1,94 @@
+gemini suggestions:
+
+1. Frontend Layer
+Objective: The user interface where users view schedules, manage their "Fairness Score," and initiate meeting requests.
+
+Component 1: Browser Application (SPA)
+
+Technology: React (built with Vite), FullCalendar library for schedule visualization, and Axios for API requests.
+
+Role: Renders a responsive user interface, manages local state, and presents data to the client.
+
+Component 2: Hosting & Distribution (CDN)
+
+Technology: Amazon S3 (Static Website Hosting) + Amazon CloudFront (CDN).
+
+Role: S3 acts as the storage bucket for the static HTML/JS files. CloudFront distributes these files globally to ensure low latency and manages SSL/HTTPS security certificates.
+
+
+2. Security & Entry Layer
+Objective: Verifying user identity and managing secure access to external calendars (Google/Outlook).
+
+Component 3: Identity Provider
+
+Technology: Amazon Cognito.
+
+Role:
+
+Manages User Sign-up and Sign-in.
+
+Critical: Securely encrypts and stores OAuth Tokens (Access/Refresh tokens) for Google and Outlook, allowing the backend to act on the user's behalf.
+
+Component 4: API Gateway
+
+Technology: Amazon API Gateway (REST API).
+
+Role: The single entry point for the Frontend. It receives HTTP requests, validates the authentication token with Cognito, and routes valid requests to the backend logic.
+
+
+3. Business Logic & Orchestration Layer
+Objective: The system's "Brain." This layer executes the Fairness Algorithm and Dynamic Optimization.
+
+Component 5: Workflow Orchestrator
+
+Technology: AWS Step Functions.
+
+Role: Manages the State Machine. Instead of a single monolithic function, it orchestrates the workflow logic: "Fetch Data -> Calculate Score -> If Score is low, Trigger Optimization -> Finalize."
+
+Component 6: Compute Units (Microservices)
+
+Technology: AWS Lambda (Python 3.9+).
+
+Key Functions:
+
+FetchCalendars: Connects to Google/Outlook APIs to retrieve events.
+
+FairnessAlgo: Calculates the weighted "Fairness Score" for every available slot based on user history.
+
+ReshuffleEngine: (Triggered only when necessary) Identifies low-priority meetings and moves them to resolve deadlocks.
+
+BookingAgent: Finalizes the event creation in external calendars and updates the database.
+
+
+4. Data Persistence Layer
+Objective: Storing long-term data (User profiles, "Suffering" history, Meeting logs).
+
+Component 7: NoSQL Database
+
+Technology: Amazon DynamoDB.
+
+Table A - UsersTable: Stores user profiles, preferences (e.g., "Morning Person"), and the current cumulative FairnessScore.
+
+Table B - MeetingsTable: Logs metadata for meetings created by the system (used for auditing and future score calculations).
+
+5. External Integrations
+Google Calendar API / Microsoft Graph API: The external sources from which schedule data is pulled and where actual meetings are booked.
+
+6. Infrastructure & DevOps
+Component 8: Infrastructure as Code (IaC)
+
+Technology: AWS SAM (Serverless Application Model).
+
+Role: A template.yaml file defining the entire architecture as code. This allows for single-command deployment (sam deploy) and ensures environment consistency, preventing manual configuration errors.
+
+
+
+
+Logical Component    AWS Service            Core Role                 Language/Format
+    Frontend       S3 + CloudFront  Hosting and content delivery       React (JS/TS)
+      Auth            Cognito      User management & Token storage           -
+      API          API Gateway   HTTP Request management & Security     REST / JSON
+  Orchestrator   Step Functions   Decision-making workflow management    JSON / ASL
+   Compute           Lambda     Running Fairness/Dynamic algorithms      Python 3.9
+   Database        DynamoDB     Storing Fairness Scores & User Data         NoSQL
+  Deployment        AWS SAM     Infrastructure definition & Deployment      YAML
