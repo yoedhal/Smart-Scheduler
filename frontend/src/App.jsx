@@ -59,6 +59,10 @@ function AppContent() {
           setActiveView('profile'); // navigate straight to profile to show connected calendar
         } catch (err) {
           console.error('OAuth callback exchange failed:', err);
+          const label = oauthPending.provider === 'google' ? 'Google Calendar' : 'Microsoft Outlook';
+          setCalendarToast({ type: 'error', msg: `Failed to connect ${label}: ${err.message || 'Unknown error. Check browser console for details.'}` });
+          setTimeout(() => setCalendarToast(null), 10000);
+          setActiveView('profile');
         }
       }
 

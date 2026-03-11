@@ -27,7 +27,7 @@ import db   # local module
 # Config (from Lambda environment variables)
 # ---------------------------------------------------------------------------
 
-FRONTEND_URL         = os.environ.get('FRONTEND_URL', 'https://main.d2v1ecqqvohzov.amplifyapp.com')
+FRONTEND_URL         = os.environ.get('FRONTEND_URL', 'https://main.dswqybh1v4bo.amplifyapp.com')
 GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 MS_CLIENT_ID         = os.environ.get('MICROSOFT_CLIENT_ID', '')
