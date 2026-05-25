@@ -89,6 +89,11 @@ def handle_book(identity: dict, action: str, data: str | None) -> dict:
     _user_repo.update_fairness_on_booking(all_pids, fairness_impact)
     _meeting_repo.log_activity(request_id, "booked", user_id)
 
+    # Update local dict to reflect the confirmed state so the response is accurate
+    meeting["status"] = "confirmed"
+    meeting["selectedSlotStart"] = slot_start_iso
+    meeting["updatedAt"] = datetime.now().isoformat()
+
     end_iso = _compute_end_iso(slot_start_iso, slot_data, meeting)
     ics_content = calendar_client.generate_ics_content(
         title=meeting.get("title", "Meeting"), start_iso=slot_start_iso, end_iso=end_iso

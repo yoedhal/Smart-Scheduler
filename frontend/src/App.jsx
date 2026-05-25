@@ -404,6 +404,9 @@ function AppContent() {
                 <MeetingDashboard
                   meetings={meetings}
                   onRefresh={refreshAll}
+                  onMeetingUpdate={(requestId, updates) =>
+                    setMeetings(prev => prev.map(m => m.requestId === requestId ? { ...m, ...updates } : m))
+                  }
                   currentUserId={profile.id}
                   onParticipantClick={handleParticipantClick}
                   lastRefreshed={lastRefreshed}

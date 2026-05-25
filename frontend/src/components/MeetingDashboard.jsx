@@ -22,7 +22,7 @@ const getInitials = (name) => name
   ? name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
   : '?';
 
-export default function MeetingDashboard({ meetings, onRefresh, currentUserId, onParticipantClick, lastRefreshed, onNewMeetingClick, isCalendarConnected, onConnectCalendar }) {
+export default function MeetingDashboard({ meetings, onRefresh, onMeetingUpdate, currentUserId, onParticipantClick, lastRefreshed, onNewMeetingClick, isCalendarConnected, onConnectCalendar }) {
   const notify = useToast();
   const [expandedId, setExpandedId]             = useState(null);
   const [loading, setLoading]                   = useState(false);
@@ -95,6 +95,8 @@ export default function MeetingDashboard({ meetings, onRefresh, currentUserId, o
     setExpandedId(null);
     try {
       const result = await apiPost(`/api/meetings/${meetingId}/book/${encodeURIComponent(slot.startIso)}`);
+      // Optimistic update — immediately reflect confirmed status so the slot panel cannot reopen
+      onMeetingUpdate?.(meetingId, { status: 'confirmed', selectedSlotStart: slot.startIso });
       if (result?.calendarSyncWarning) {
         notify(result.calendarSyncWarning, 'error');
       } else {
@@ -814,8 +816,8 @@ function MeetingCard({
         </div>
       </div>
 
-      {/* Slot selection panel — organizer, pending, expanded */}
-      {isExpanded && isOrganizer && !isConfirmed && (
+      {/* Slot selection panel — organizer, pending, expanded, not in-flight */}
+      {isExpanded && isOrganizer && !isConfirmed && busyId !== meeting.requestId && (
         <div className="mc-panel slots-panel">
           {/* AI-generated slots */}
           {hasSlots && (
