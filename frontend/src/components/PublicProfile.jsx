@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiGet } from '../apiClient';
 import { X, Users, CalendarPlus } from 'lucide-react';
 import './PublicProfile.css';
+import { fairnessColor } from '../fairnessColor';
 
 export default function PublicProfile({ profile, onClose, onScheduleWith, currentUserId }) {
   const [sharedMeetings, setSharedMeetings] = useState(null);
@@ -20,7 +21,7 @@ export default function PublicProfile({ profile, onClose, onScheduleWith, curren
     : '??';
 
   const score = Math.round(profile.fairness_score ?? profile.score ?? 100);
-  const scoreColor = score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
+  const scoreColor = fairnessColor(score);
 
   return (
     <div className="pp-overlay" onClick={e => e.target === e.currentTarget && onClose()}>

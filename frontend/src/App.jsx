@@ -41,7 +41,6 @@ function AppContent() {
   const [selectedMeeting, setSelectedMeeting] = useState(null); // for MeetingDetailModal
   const [declineWizardId, setDeclineWizardId] = useState(null); // requestId being declined
   const [showPalette, setShowPalette]         = useState(false);
-  const [activities, setActivities]           = useState([]);
   const [users, setUsers]                     = useState([]);
   // helper so child components can still call setActiveView('meetings') etc.
   const setActiveView = (view) => navigate(`/${view === 'dashboard' ? '' : view}`);
@@ -101,16 +100,14 @@ function AppContent() {
         }
       }
 
-      const [profileData, meetingsData, calStatus, activityData] = await Promise.all([
+      const [profileData, meetingsData, calStatus] = await Promise.all([
         apiGet('/api/profile'),
         apiGet('/api/meetings'),
         apiGet('/api/calendar/status').catch(() => null), // non-fatal
-        apiGet('/api/activity').catch(() => []),          // non-fatal
       ]);
       setProfile(profileData);
       setMeetings(Array.isArray(meetingsData) ? meetingsData : (meetingsData?.meetings ?? []));
       if (calStatus) setCalendarStatus(calStatus);
-      setActivities(Array.isArray(activityData) ? activityData : []);
       setLoading(false);
     };
 
@@ -128,19 +125,17 @@ function AppContent() {
 
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
-  /** Refreshes profile (fairness score), meetings list, calendar status, and activity feed. */
+  /** Refreshes profile (fairness score), meetings list, and calendar status. */
   const refreshAll = () =>
     Promise.all([
       apiGet('/api/profile'),
       apiGet('/api/meetings'),
       apiGet('/api/calendar/status').catch(() => null),
-      apiGet('/api/activity').catch(() => []),
     ])
-      .then(([profileData, meetingsData, calStatus, activityData]) => {
+      .then(([profileData, meetingsData, calStatus]) => {
         setProfile(profileData);
         setMeetings(Array.isArray(meetingsData) ? meetingsData : (meetingsData?.meetings ?? []));
         if (calStatus) setCalendarStatus(calStatus);
-        setActivities(Array.isArray(activityData) ? activityData : []);
         setLastRefreshed(new Date());
       })
       .catch(err => console.error('Refresh failed', err));
@@ -228,6 +223,25 @@ function AppContent() {
     }
     setMeetingPrefill(email);
     setShowGlobalCreate(true);
+  };
+
+  /** AI meeting setup: parse a natural-language request, then open the create modal pre-filled. */
+  const handleNewMeetingFromText = async (text) => {
+    if (!isCalendarConnected) {
+      toast('Connect your Google Calendar to create meetings.', 'info');
+      navigate('/profile', { state: { initialTab: 'calendar' } });
+      return;
+    }
+    try {
+      const parsed = await apiParseMeetingNL(text);
+      setMeetingPrefill({ parsed });
+      setShowGlobalCreate(true);
+      if (parsed.unmatchedHints?.length) {
+        toast?.(`Couldn't match: ${parsed.unmatchedHints.join(', ')} — add manually`, 'info');
+      }
+    } catch (e) {
+      toast?.(`AI parse failed: ${e.message || e}`, 'error');
+    }
   };
 
   /** Calendar click-to-create: open global create modal without navigating. */
@@ -382,12 +396,13 @@ function AppContent() {
               <DashboardView
                 profile={profile}
                 meetings={meetings}
-                activities={activities}
                 onNavigate={setActiveView}
                 needsAction={needsAction}
                 isCalendarConnected={isCalendarConnected}
                 onConnectCalendar={() => navigate('/profile', { state: { initialTab: 'calendar' } })}
                 onNewMeeting={() => { setMeetingPrefill(null); setShowGlobalCreate(true); }}
+                onNewMeetingFromText={handleNewMeetingFromText}
+                onViewFairness={() => navigate('/profile', { state: { initialTab: 'fairness', expandFairness: true } })}
               />
             } />
 
@@ -457,6 +472,7 @@ function AppContent() {
                   onCalendarDisconnect={handleCalendarDisconnect}
                   onProfileUpdate={setProfile}
                   initialTab={location.state?.initialTab}
+                  expandFairness={location.state?.expandFairness}
                 />
               </div>
             } />
@@ -483,19 +499,7 @@ function AppContent() {
           onClose={() => setShowPalette(false)}
           onNavigate={setActiveView}
           onNewMeeting={() => { setMeetingPrefill(null); setShowGlobalCreate(true); setShowPalette(false); }}
-          onNewMeetingFromText={async (text) => {
-            try {
-              const parsed = await apiParseMeetingNL(text);
-              setMeetingPrefill({ parsed });
-              setShowGlobalCreate(true);
-              setShowPalette(false);
-              if (parsed.unmatchedHints?.length) {
-                toast?.(`Couldn't match: ${parsed.unmatchedHints.join(', ')} — add manually`, 'info');
-              }
-            } catch (e) {
-              toast?.(`AI parse failed: ${e.message || e}`, 'error');
-            }
-          }}
+          onNewMeetingFromText={async (text) => { setShowPalette(false); await handleNewMeetingFromText(text); }}
           signOut={signOut}
           meetings={meetings}
           users={users}

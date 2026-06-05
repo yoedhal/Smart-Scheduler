@@ -16,8 +16,9 @@ OAuth Flow:
 import json
 import os
 import time
-import urllib.request
+import urllib.error
 import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict
 
@@ -288,7 +289,11 @@ def create_google_event(user_id: str, title: str, start_iso: str, end_iso: str,
 def delete_google_event(user_id: str, event_id: str) -> bool:
     """Delete a Google Calendar event. Returns True on success."""
     token = _ensure_fresh_google_token(user_id)
-    if not token or not event_id:
+    if not token:
+        print(f"[calendar] delete_google_event skipped for {user_id}: no valid token")
+        return False
+    if not event_id:
+        print(f"[calendar] delete_google_event skipped for {user_id}: empty event_id")
         return False
     try:
         url = f"{GOOGLE_CALENDAR}/calendars/primary/events/{event_id}"
@@ -296,7 +301,15 @@ def delete_google_event(user_id: str, event_id: str) -> bool:
         req.add_header('Authorization', f'Bearer {token}')
         with urllib.request.urlopen(req, timeout=10):
             return True
-    except Exception:
+    except urllib.error.HTTPError as e:
+        # 404/410 = event already gone — treat as success so cleanup is idempotent.
+        if e.code in (404, 410):
+            print(f"[calendar] delete_google_event {user_id} eid={event_id}: already gone ({e.code})")
+            return True
+        print(f"[calendar] delete_google_event failed for {user_id} eid={event_id}: HTTP {e.code} {e.reason}")
+        return False
+    except Exception as e:
+        print(f"[calendar] delete_google_event failed for {user_id} eid={event_id}: {e}")
         return False
 
 
@@ -481,21 +494,33 @@ def write_meeting_to_calendars(creator_id: str, participant_ids: List[str],
     return {"event_ids": event_ids, "failed": failed_ids}
 
 
-def remove_meeting_from_calendars(external_ids: Dict[str, str]):
+def remove_meeting_from_calendars(external_ids: Dict[str, str]) -> dict:
     """
     Remove a previously booked meeting from all connected calendars.
-    external_ids is a dict: {userId: "provider:eventId"}
+    external_ids is a dict: {userId: "provider:eventId"}.
+    Returns {"succeeded": [userId, ...], "failed": [userId, ...]}.
     """
+    succeeded: List[str] = []
+    failed: List[str] = []
     if not external_ids:
-        return
+        return {"succeeded": succeeded, "failed": failed}
     for uid, composite_id in external_ids.items():
         try:
-            if ':' not in composite_id: continue
+            if ':' not in composite_id:
+                print(f"[calendar] remove skipped uid={uid}: bad composite id {composite_id!r}")
+                failed.append(uid)
+                continue
             provider, eid = composite_id.split(':', 1)
             if provider == 'google':
-                delete_google_event(uid, eid)
-        except Exception:
-            pass
+                ok = delete_google_event(uid, eid)
+            else:
+                print(f"[calendar] remove skipped uid={uid}: unknown provider {provider!r}")
+                ok = False
+            (succeeded if ok else failed).append(uid)
+        except Exception as e:
+            print(f"[calendar] remove failed uid={uid}: {e}")
+            failed.append(uid)
+    return {"succeeded": succeeded, "failed": failed}
 
 
 def update_google_event(user_id: str, event_id: str, title: str,

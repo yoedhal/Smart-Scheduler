@@ -17,6 +17,7 @@ export default function ProfileView({
   onCalendarDisconnect,
   onProfileUpdate,
   initialTab,
+  expandFairness = false,
 }) {
   const [profile, setProfile]         = useState(initialProfile);
   const [activeTab, setActiveTab]     = useState(initialTab || 'profile');
@@ -109,7 +110,7 @@ export default function ProfileView({
         )}
 
         {activeTab === 'fairness' && (
-          <FairnessTab profile={profile} onProfileUpdate={handleProfileUpdate} />
+          <FairnessTab profile={profile} onProfileUpdate={handleProfileUpdate} defaultExpanded={expandFairness} />
         )}
 
       </div>{/* end pv-tab-content */}

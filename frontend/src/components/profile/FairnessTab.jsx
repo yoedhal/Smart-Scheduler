@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import FairnessBreakdown from './FairnessBreakdown.jsx';
+import { fairnessColor, fairnessLabel } from '../../fairnessColor';
 
-export default function FairnessTab({ profile, onProfileUpdate }) {
-  const [showFairnessExplainer, setShowFairnessExplainer] = useState(false);
+export default function FairnessTab({ profile, onProfileUpdate, defaultExpanded = false }) {
+  const [showFairnessExplainer, setShowFairnessExplainer] = useState(defaultExpanded);
 
   const score      = Math.round(profile.fairness_score ?? 100);
-  const scoreColor = score >= 80 ? '#34d399' : score >= 60 ? '#fbbf24' : '#f87171';
+  const scoreColor = fairnessColor(score);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
@@ -39,7 +40,7 @@ export default function FairnessTab({ profile, onProfileUpdate }) {
           </div>
           <div>
             <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.3rem' }}>
-              {score >= 80 ? 'Excellent' : score >= 60 ? 'Good standing' : 'Needs attention'}
+              {fairnessLabel(score)}
             </div>
             <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
               Top {Math.max(1, 100 - score + 5)}% of your organization
@@ -47,11 +48,11 @@ export default function FairnessTab({ profile, onProfileUpdate }) {
             <span style={{
               display: 'inline-block', padding: '0.2rem 0.65rem',
               borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700,
-              background: score >= 80 ? 'rgba(52,211,153,0.12)' : score >= 60 ? 'rgba(251,191,36,0.12)' : 'rgba(248,113,113,0.12)',
+              background: `${scoreColor}1f`,
               color: scoreColor,
               border: `1px solid ${scoreColor}33`,
             }}>
-              {score >= 80 ? 'Top performer' : score >= 60 ? 'On track' : 'At risk'}
+              {score >= 75 ? 'Top performer' : score >= 50 ? 'On track' : score >= 30 ? 'Building credit' : 'At risk'}
             </span>
           </div>
         </div>

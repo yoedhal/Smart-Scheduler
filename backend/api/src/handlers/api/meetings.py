@@ -233,7 +233,15 @@ def handle_cancel(identity: dict, action: str) -> dict:
         raise HTTPException(status_code=403, detail="Only the organizer can cancel a meeting")
     if ext_ids := meeting.get("externalEventIds"):
         try:
-            calendar_client.remove_meeting_from_calendars(ext_ids)
+            cleanup = calendar_client.remove_meeting_from_calendars(ext_ids)
+            logger.info(
+                f"[cancel] calendar cleanup for {request_id}: "
+                f"deleted={len(cleanup['succeeded'])} failed={len(cleanup['failed'])}"
+            )
+            if cleanup["failed"]:
+                logger.warning(
+                    f"[cancel] {request_id} could not delete events for users: {cleanup['failed']}"
+                )
         except Exception as exc:
             logger.error(f"Calendar delete failed during cancel for {request_id}: {exc}")
     updated = _meeting_repo.cancel(request_id, user_id)

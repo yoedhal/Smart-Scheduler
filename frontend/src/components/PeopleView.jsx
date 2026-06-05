@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { apiGet } from '../apiClient';
 import { Users, Copy, Check, CalendarPlus, Search } from 'lucide-react';
 import './PeopleView.css';
+import { fairnessColor } from '../fairnessColor';
 
 const getInitials = (name) =>
   name ? name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() : '?';
 
-const getScoreColor = (score) =>
-  score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
+const getScoreColor = fairnessColor;
 
 const APP_URL = window.location.origin;
 
