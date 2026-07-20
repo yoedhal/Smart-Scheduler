@@ -11,7 +11,9 @@ if os.environ.get('ENVIRONMENT') == 'development':
     except ImportError:
         pass
 
-from fastapi import FastAPI, HTTPException, Request
+import json
+
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
@@ -70,6 +72,49 @@ def health(action: Optional[str] = None, token: Optional[str] = None, data: Opti
         except Exception as _e:
             db_status = f"DynamoDB ERROR: {str(_e)[:100]}"
         return {"status": "ok", "db": db_status, "sfn": "SmartSchedulerWorkflow"}
+
+    try:
+        identity = validate_access_token(token)
+        if not identity:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        return dispatch(action, identity, data)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "action": action, "message": f"Internal error: {exc}"}
+
+
+@app.post("/api/proxy")
+async def api_proxy(request: Request, authorization: Optional[str] = Header(None)):
+    """
+    Real POST transport for the frontend, replacing the GET /health query-string
+    tunnel. The Cognito access token rides in the Authorization header (off the
+    URL and out of access logs) and the payload in the JSON body (no URL-length
+    limit). Route has no gateway authorizer — we validate the access token here
+    via cognito-idp:GetUser, exactly like /health, then dispatch identically.
+
+    Body: {"action": "<action>", "data": <object|string|null>}
+    Always returns HTTP 200; check body.status === 'error' on the frontend.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Body must be JSON")
+
+    action = body.get("action")
+    data = body.get("data")
+    # dispatch() expects data as a JSON string (same as the /health query param).
+    if data is not None and not isinstance(data, str):
+        data = json.dumps(data)
+
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+
+    if not action or not token:
+        raise HTTPException(status_code=400, detail="Missing action or Authorization token")
 
     try:
         identity = validate_access_token(token)
