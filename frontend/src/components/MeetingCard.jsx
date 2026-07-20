@@ -231,7 +231,7 @@ export default function MeetingCard({
       {isExpanded && isOrganizer && !isConfirmed && busyId !== meeting.requestId && (
         <div className="mc-panel slots-panel">
           {/* AI's choice — slot recommendation + reasoning */}
-          {meeting.aiBestSlotReason && (
+          {meeting.aiMethod === 'ai' && meeting.aiBestSlotReason && (
             <div style={{
               border: '1px solid #8b5cf644',
               background: 'linear-gradient(135deg, #8b5cf60d, #8b5cf604)',

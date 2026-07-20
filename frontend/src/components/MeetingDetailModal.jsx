@@ -209,7 +209,7 @@ export default function MeetingDetailModal({
           )}
 
           {/* Scoring verdict — AI when available, engine baseline otherwise */}
-          {meeting.status !== 'cancelled' && meeting.aiMethod && (
+          {meeting.status !== 'cancelled' && meeting.aiMethod === 'ai' && (
             <DetailRow label={meeting.aiMethod === 'ai' ? 'AI analysis' : 'Scoring'}>
               <AiAnalysisPanel
                 analysis={{

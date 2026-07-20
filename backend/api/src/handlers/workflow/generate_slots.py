@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def handler(payload: dict) -> dict:
+    request_id = payload.get("request_id", "?")
     date_start = datetime.fromisoformat(payload["date_range_start"])
     date_end = datetime.fromisoformat(payload["date_range_end"])
     duration_minutes = payload.get("duration_minutes", 60)
@@ -35,6 +36,14 @@ def handler(payload: dict) -> dict:
 
     preferred_hours = payload.get("preferred_hours")
     excluded_weekdays = set(payload.get("excluded_weekdays") or [])
+
+    logger.info(
+        f"[sfn:generate_slots] START request_id={request_id} "
+        f"range={payload['date_range_start']} → {payload['date_range_end']} "
+        f"duration={duration_minutes}m tz_offset={tz_offset} "
+        f"participants={len(all_ids)} preferred_hours={preferred_hours} "
+        f"excluded_weekdays={sorted(excluded_weekdays)}"
+    )
 
     FULL_DAY_HOURS = list(range(7, 22))
     wh_list = FULL_DAY_HOURS
@@ -51,11 +60,17 @@ def handler(payload: dict) -> dict:
             pwd = set(p.get("workingDays") or [0, 1, 2, 3, 4])
             intersected_wd &= pwd
             union_wd |= pwd
+        if not intersected_wd:
+            logger.warning(
+                f"[sfn:generate_slots] request_id={request_id} working_day intersection is empty "
+                f"— falling back to union {sorted(union_wd)}"
+            )
         allowed_wd = intersected_wd if intersected_wd else (union_wd or set(range(7)))
     else:
         allowed_wd = set(range(7))
 
     wd_list = sorted(allowed_wd - excluded_weekdays)
+    logger.info(f"[sfn:generate_slots] request_id={request_id} allowed_weekdays={wd_list}")
 
     candidates = engine.generate_candidate_slots(
         date_start, date_end,
@@ -64,6 +79,7 @@ def handler(payload: dict) -> dict:
         working_days=wd_list,
     )
     end_delta = timedelta(minutes=duration_minutes)
+    logger.info(f"[sfn:generate_slots] request_id={request_id} raw_candidates={len(candidates)}")
 
     # Fetch calendar busy intervals for all participants (best-effort)
     all_busy: Dict[str, list] = {}
@@ -72,8 +88,11 @@ def handler(payload: dict) -> dict:
             busy = _cc.get_user_busy_slots(uid, date_start, date_end)
             if busy:
                 all_busy[uid] = busy
+                logger.info(f"[sfn:generate_slots] calendar uid={uid} busy_intervals={len(busy)}")
+            else:
+                logger.info(f"[sfn:generate_slots] calendar uid={uid} no busy intervals")
         except Exception as e:
-            logger.warning(f"Calendar fetch failed for {uid}: {e}")
+            logger.warning(f"[sfn:generate_slots] calendar fetch failed uid={uid}: {e}")
 
     # Supplement creator busy with confirmed Smart Scheduler meetings (covers
     # users without a connected external calendar).
@@ -101,7 +120,15 @@ def handler(payload: dict) -> dict:
     # Filter 1 — exclude entire calendar dates blocked by creator's all-day events
     all_day_dates = collect_all_day_dates(creator_busy)
     if all_day_dates:
+        before = len(candidates)
         candidates = [c for c in candidates if c.date() not in all_day_dates]
+        logger.info(
+            f"[sfn:generate_slots] filter1_allday request_id={request_id} "
+            f"blocked_dates={sorted(str(d) for d in all_day_dates)} "
+            f"removed={before - len(candidates)} remaining={len(candidates)}"
+        )
+    else:
+        logger.info(f"[sfn:generate_slots] filter1_allday request_id={request_id} no all-day blocks")
 
     # Filter 2 — hard-remove slots where the creator has a regular-event conflict
     if creator_busy:
@@ -115,7 +142,14 @@ def handler(payload: dict) -> dict:
                 if slot_dt < b_end and slot_end > b_start:
                     return True
             return False
+        before = len(candidates)
         candidates = [c for c in candidates if not _creator_conflict(c)]
+        logger.info(
+            f"[sfn:generate_slots] filter2_creator request_id={request_id} "
+            f"removed={before - len(candidates)} remaining={len(candidates)}"
+        )
+    else:
+        logger.info(f"[sfn:generate_slots] filter2_creator request_id={request_id} creator has no busy intervals — skipped")
 
     # Filter 3 — remove slots where the majority of participants conflict.
     # Slots that survive with conflictCount > 0 receive a heavy score penalty
@@ -135,17 +169,38 @@ def handler(payload: dict) -> dict:
         return count
 
     majority_threshold = len(all_ids) / 2
+    logger.info(
+        f"[sfn:generate_slots] filter3_majority request_id={request_id} "
+        f"threshold={majority_threshold:.1f} (participants={len(all_ids)})"
+    )
     candidate_slots = []
+    majority_removed = 0
+    slots_with_conflicts = 0
+    preferred_count = 0
     for dt in candidates:
         cc = _conflict_count(dt)
-        if cc <= majority_threshold:
-            local_hour = int((dt.hour + round(tz_offset)) % 24)
-            is_preferred = preferred_hours is None or local_hour in preferred_hours
-            candidate_slots.append({
-                "startIso": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "endIso": (dt + end_delta).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "conflictCount": cc,
-                "isPreferred": is_preferred,
-            })
+        if cc > majority_threshold:
+            majority_removed += 1
+            continue
+        local_hour = int((dt.hour + round(tz_offset)) % 24)
+        is_preferred = preferred_hours is None or local_hour in preferred_hours
+        if cc > 0:
+            slots_with_conflicts += 1
+        if is_preferred:
+            preferred_count += 1
+        candidate_slots.append({
+            "startIso": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "endIso": (dt + end_delta).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "conflictCount": cc,
+            "isPreferred": is_preferred,
+        })
+
+    logger.info(
+        f"[sfn:generate_slots] DONE request_id={request_id} "
+        f"final_slots={len(candidate_slots)} "
+        f"majority_removed={majority_removed} "
+        f"slots_with_conflicts={slots_with_conflicts} "
+        f"preferred={preferred_count}"
+    )
     payload["candidate_slots"] = candidate_slots
     return payload

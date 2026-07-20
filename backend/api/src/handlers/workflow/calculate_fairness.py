@@ -17,12 +17,19 @@ logger = logging.getLogger(__name__)
 PREFERENCE_BOOST = 18  # pts added to slots matching user's preferred time window
 
 def handler(payload: dict) -> dict:
+    request_id = payload.get("request_id", "?")
     profiles = payload.get("participant_profiles", [])
     participant_states = payload.get("participant_states", [])
     candidate_slots = payload.get("candidate_slots", [])
     duration_minutes = payload.get("duration_minutes", 60)
     tz_offset = float(payload.get("tz_offset_hours", 0.0))
     preferred_hours = payload.get("preferred_hours")  # None = no preference set
+
+    logger.info(
+        f"[sfn:calculate_fairness] START request_id={request_id} "
+        f"slots={len(candidate_slots)} participants={len(profiles)} "
+        f"preferred_hours={preferred_hours}"
+    )
 
     participant_tz_offsets = [get_tz_offset_hours(p.get("timezone", "UTC")) for p in profiles] or None
     participant_working_days = [p.get("workingDays", [0, 1, 2, 3, 4]) for p in profiles] or None
@@ -48,10 +55,25 @@ def handler(payload: dict) -> dict:
         )
         scored.append({**slot, **result, "aiScored": False, "aiSuggestions": None})
 
+    if scored:
+        raw_scores = [s["score"] for s in scored]
+        best = max(scored, key=lambda s: s["score"])
+        logger.info(
+            f"[sfn:calculate_fairness] heuristic_scores request_id={request_id} "
+            f"min={min(raw_scores):.1f} max={max(raw_scores):.1f} "
+            f"avg={sum(raw_scores)/len(raw_scores):.1f} "
+            f"best_slot={best.get('startIso')} best_score={best['score']:.1f}"
+        )
+
     # Apply preference boost: slots in the user's preferred time window score higher.
     # Only activated when preferred_hours is explicitly set; with no preference all
     # slots are equally preferred (isPreferred=True for all) so no boost is needed.
     if preferred_hours:
+        boosted = sum(1 for s in scored if s.get("isPreferred"))
+        logger.info(
+            f"[sfn:calculate_fairness] preference_boost request_id={request_id} "
+            f"boost={PREFERENCE_BOOST}pts boosted_slots={boosted}"
+        )
         for s in scored:
             if s.get("isPreferred"):
                 s["score"] = min(100.0, round(s["score"] + PREFERENCE_BOOST, 1))
@@ -74,4 +96,7 @@ def handler(payload: dict) -> dict:
         clean_scored.append({k: v for k, v in slot.items() if k not in _internal})
 
     payload["scored_slots"] = clean_scored
+    logger.info(
+        f"[sfn:calculate_fairness] DONE request_id={request_id} scored_slots={len(clean_scored)}"
+    )
     return payload

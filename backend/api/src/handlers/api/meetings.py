@@ -431,9 +431,15 @@ def handle_reschedule(identity: dict, action: str, data: str | None) -> dict:
     _meeting_repo.update_meta(request_id, meeting)
     _meeting_repo.delete_slots(request_id)
 
-    from src.handlers.api._scheduling import build_reschedule_payload, run_local_steps
+    from src.handlers.api._scheduling import build_reschedule_payload, run_local_steps, _run_ai_inline
     payload = build_reschedule_payload(meeting, user_id, request_id, search_days)
     run_local_steps(payload)
+
+    ai_fields = _run_ai_inline(request_id, payload)
+    if ai_fields:
+        meeting.update(ai_fields)
+        _meeting_repo.update_meta(request_id, meeting)
+
     _meeting_repo.log_activity(request_id, "rescheduled", user_id, {"searchDays": search_days})
     return {"status": "success", "message": "Meeting rescheduled — new slots generated"}
 

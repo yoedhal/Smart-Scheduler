@@ -24,6 +24,11 @@ def handler(payload: dict) -> dict:
     request_id = payload["request_id"]
     scored_slots = payload.get("scored_slots", [])
 
+    logger.info(
+        f"[sfn:store_results] START request_id={request_id} "
+        f"scored_slots={len(scored_slots)}"
+    )
+
     from src.core.fairness import engine
     from datetime import datetime as _dt
     try:
@@ -31,8 +36,19 @@ def handler(payload: dict) -> dict:
     except Exception:
         days_forward = 7
     slot_count = min(50, max(10, days_forward * 4))
-    logger.info(f"store_results: scored={len(scored_slots)} days_forward={days_forward} slot_count={slot_count}")
+    logger.info(
+        f"[sfn:store_results] selecting request_id={request_id} "
+        f"days_forward={days_forward} slot_count_cap={slot_count}"
+    )
     best_slots = engine.select_best_slots(scored_slots, count=slot_count)
+
+    if best_slots:
+        top = best_slots[0]
+        logger.info(
+            f"[sfn:store_results] top_slot request_id={request_id} "
+            f"startIso={top.get('startIso')} score={top.get('score', 0):.1f} "
+            f"conflictCount={top.get('conflictCount', 0)}"
+        )
 
     for slot_data in best_slots:
         slot = models.SuggestedTimeSlot(
@@ -60,5 +76,9 @@ def handler(payload: dict) -> dict:
         except Exception as e:
             logger.warning(f"store_results: failed to log created activity: {e}")
 
+    logger.info(
+        f"[sfn:store_results] DONE request_id={request_id} "
+        f"stored={len(best_slots)}"
+    )
     payload["stored_slots_count"] = len(best_slots)
     return payload
