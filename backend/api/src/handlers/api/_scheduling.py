@@ -164,6 +164,9 @@ def _run_ai_inline(request_id: str, sfn_input: dict) -> Optional[dict]:
         ai_latency_ms = int((time.time() - t0) * 1000)
 
         # Update each slot's primary score + explanation with the AI verdict.
+        # On a heuristic_fallback (no key / OpenAI error) the scores are the
+        # engine's, so aiScored must stay False — the UI badge reflects it.
+        was_ai_scored = ai_result.get("method") == "ai"
         ai_by_start = {str(entry.get("startIso")): entry for entry in ai_result.get("slot_scores", [])}
         for slot in slots:
             start_key = slot.startIso.isoformat()
@@ -174,7 +177,7 @@ def _run_ai_inline(request_id: str, sfn_input: dict) -> Optional[dict]:
             ai_score = float(ai_entry.get("ai_score", slot.score))
             slot_dict["score"] = ai_score
             slot_dict["explanation"] = ai_entry.get("description", slot_dict.get("explanation", ""))
-            slot_dict["aiScored"] = True
+            slot_dict["aiScored"] = was_ai_scored
             _meeting_repo.write_slot(request_id, start_key, slot_dict)
 
         ai_best_iso = str(ai_result.get("best_slot", ""))
