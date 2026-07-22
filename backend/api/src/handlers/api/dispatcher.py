@@ -17,15 +17,12 @@ def dispatch(action: str, identity: dict, data: str | None) -> dict:
         "calendar_events":      lambda: _cal.handle_calendar_events(identity, data),
         "calendar_status":      lambda: _cal.handle_calendar_status(identity),
         "register_calendar_watch": lambda: _cal.handle_register_watch(identity),
-        "stop_calendar_watch":  lambda: _cal.handle_stop_watch(identity),
         "check_calendar_sync":  lambda: _cal.handle_check_sync(identity),
         "create_meeting":       lambda: _mtg.handle_create_meeting(identity, data),
         "score_slot":           lambda: _mtg.handle_score_slot(identity, data),
         "parse_meeting_nl":     lambda: _mtg.handle_parse_meeting_nl(identity, data),
-        "update_ics_url":       lambda: _cal.handle_ics_url(identity, data),
         "profile_stats":        lambda: _prf.handle_profile_stats(identity),
         "list_users":           lambda: _prf.handle_list_users(identity),
-        "activity_feed":        lambda: _prf.handle_activity_feed(identity),
         "reset_fairness":       lambda: _prf.handle_reset_fairness(identity),
     }
     if action in EXACT:

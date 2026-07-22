@@ -99,8 +99,6 @@ export async function apiGet(path) {
 
     if (path === '/api/profile/stats') return apiProxy('profile_stats');
 
-    if (path === '/api/activity') return apiProxy('activity_feed');
-
     if (path === '/api/users') return apiProxy('list_users');
 
     // /api/users/<userId>/shared_meetings
@@ -170,11 +168,6 @@ export async function apiParseMeetingNL(text) {
     return apiProxy('parse_meeting_nl', { text });
 }
 
-/** Save (or clear) the user's .ics calendar feed URL. */
-export async function apiUpdateIcsUrl(icsUrl) {
-    return apiProxy('update_ics_url', { icsUrl });
-}
-
 /** Register (or renew) a Google Calendar push-notification watch channel. */
 export async function apiRegisterCalendarWatch() {
     return apiProxy('register_calendar_watch');
@@ -187,9 +180,4 @@ export async function apiRegisterCalendarWatch() {
  */
 export async function apiCheckCalendarSync() {
     return apiProxy('check_calendar_sync');
-}
-
-/** Stop the active watch channel (called automatically on Google Calendar disconnect). */
-export async function apiStopCalendarWatch() {
-    return apiProxy('stop_calendar_watch');
 }

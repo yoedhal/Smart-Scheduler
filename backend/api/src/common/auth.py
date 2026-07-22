@@ -2,7 +2,6 @@ import logging
 from typing import Optional
 
 import boto3
-from fastapi import HTTPException, Request
 
 logger = logging.getLogger(__name__)
 
@@ -29,18 +28,3 @@ def validate_access_token(access_token: str) -> Optional[dict]:
     except Exception as exc:
         logger.warning(f"[auth] token validation failed: {exc}")
         return None
-
-
-def get_current_user_from_request(request: Request) -> dict:
-    """Extracts identity from Cognito JWT claims injected by API Gateway v2."""
-    event = request.scope.get("aws.event", {})
-    try:
-        claims = event["requestContext"]["authorizer"]["jwt"]["claims"]
-        user_id = claims.get("sub", "anonymous")
-        email = claims.get("email", f"{user_id}@example.com")
-        display_name = (
-            claims.get("name") or claims.get("cognito:username") or email.split("@")[0]
-        )
-        return {"user_id": user_id, "email": email, "display_name": display_name}
-    except (KeyError, TypeError):
-        raise HTTPException(status_code=401, detail="Unauthorized: missing or invalid JWT claims")
