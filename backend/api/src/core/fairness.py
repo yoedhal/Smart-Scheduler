@@ -18,7 +18,7 @@ class FairnessEngine:
     HOUR_WEIGHTS: Dict[int, float] = {
         6: 0.25,
         7: 0.45, 8: 0.65, 9: 0.85, 10: 1.00, 11: 1.00,
-        12: 0.15,  # Default lunch hour — very low (avoid scheduling during lunch)
+        12: 0.95,
         13: 0.90, 14: 1.00, 15: 0.95, 16: 0.85,
         17: 0.70, 18: 0.55, 19: 0.40, 20: 0.30, 21: 0.20,
     }
