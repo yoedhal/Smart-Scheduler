@@ -184,7 +184,7 @@ export default function CreateMeetingModal({ prefill, onClose, onCreated, onRefr
     if (selectedUsers.length === 0) return;
     setCreating(true);
     try {
-      await apiPost('/api/meetings/create', {
+      const created = await apiPost('/api/meetings/create', {
         title: newMeeting.title,
         description: newMeeting.description || '',
         durationMinutes: Number(newMeeting.durationMinutes),
@@ -197,7 +197,7 @@ export default function CreateMeetingModal({ prefill, onClose, onCreated, onRefr
       });
       notify('Meeting created! AI is optimizing slots…', 'success');
       onRefresh?.();
-      onCreated?.();
+      onCreated?.(created?.requestId ?? null);
     } catch (err) {
       notify(err?.message || 'Failed to create meeting', 'error');
       console.error(err);

@@ -14,8 +14,8 @@
  *
  * (Historical note: calls previously tunnelled through GET /health with the
  * token + payload in the query string to dodge the preflight entirely. That
- * workaround is retired now that the OPTIONS route handles preflight; /health
- * remains as a plain health check and transitional fallback.)
+ * workaround has been fully removed now that the OPTIONS route handles the
+ * preflight.)
  */
 
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -66,7 +66,7 @@ async function apiProxy(action, data = null, _isRetry = false) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || `HTTP ${res.status} at action=${action}`);
     }
-    // The health endpoint always returns HTTP 200 (to avoid CORS-blocked 5xx).
+    // /api/proxy always returns HTTP 200 (to avoid CORS-blocked 5xx).
     // Check the body's status field to detect backend errors.
     const body = await res.json();
     if (body?.status === 'error') {

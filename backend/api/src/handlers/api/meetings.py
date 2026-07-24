@@ -431,11 +431,14 @@ def handle_reschedule(identity: dict, action: str, data: str | None) -> dict:
     _meeting_repo.update_meta(request_id, meeting)
     _meeting_repo.delete_slots(request_id)
 
-    from src.handlers.api._scheduling import build_reschedule_payload, run_local_steps, _run_ai_inline
+    from src.handlers.api._scheduling import build_reschedule_payload, run_local_steps, dispatch_or_run_ai
     payload = build_reschedule_payload(meeting, user_id, request_id, search_days)
     run_local_steps(payload)
 
-    ai_fields = _run_ai_inline(request_id, payload)
+    # AI scoring off the critical path (async in Lambda). If it ran inline
+    # (local / fallback) we merge its fields now; the async job writes them to
+    # META itself.
+    ai_fields = dispatch_or_run_ai(request_id, payload)
     if ai_fields:
         meeting.update(ai_fields)
         _meeting_repo.update_meta(request_id, meeting)
