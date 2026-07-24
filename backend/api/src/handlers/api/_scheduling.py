@@ -55,6 +55,48 @@ def _get_state_machine_arn() -> str:
     return f"arn:aws:states:{region}:{account_id}:stateMachine:SmartSchedulerWorkflow"
 
 
+_lambda_client = None
+
+
+def _get_lambda_client():
+    global _lambda_client
+    if _lambda_client is None:
+        _lambda_client = boto3.client("lambda")
+    return _lambda_client
+
+
+def _dispatch_ai_async(request_id: str, sfn_input: dict) -> bool:
+    """
+    Fire-and-forget: invoke THIS Lambda again (InvocationType='Event') to run AI
+    scoring off the request's critical path. The re-invocation carries an
+    ``sfn_action`` so main.handler routes it to run_ai_scoring_job via sfn_router.
+
+    Returns True if the async invoke was accepted; False when there's no function
+    to invoke (not running in Lambda) or the invoke errored — the caller then
+    falls back to running AI inline.
+    """
+    function_name = os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    if not function_name:
+        return False
+    try:
+        _get_lambda_client().invoke(
+            FunctionName=function_name,
+            InvocationType="Event",  # async: API returns 202 immediately, no wait
+            Payload=json.dumps(
+                {
+                    "sfn_action": "run_ai_scoring",
+                    "payload": {"request_id": request_id, "sfn_input": sfn_input},
+                },
+                cls=_DecimalEncoder,
+            ).encode("utf-8"),
+        )
+        logger.info(f"[ai_async] dispatched off-path AI scoring for {request_id}")
+        return True
+    except Exception as exc:
+        logger.warning(f"[ai_async] async dispatch failed for {request_id}: {exc}")
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Inline AI scoring (replaces the previous async Step Function)
 # ---------------------------------------------------------------------------
@@ -164,6 +206,9 @@ def _run_ai_inline(request_id: str, sfn_input: dict) -> Optional[dict]:
         ai_latency_ms = int((time.time() - t0) * 1000)
 
         # Update each slot's primary score + explanation with the AI verdict.
+        # On a heuristic_fallback (no key / OpenAI error) the scores are the
+        # engine's, so aiScored must stay False — the UI badge reflects it.
+        was_ai_scored = ai_result.get("method") == "ai"
         ai_by_start = {str(entry.get("startIso")): entry for entry in ai_result.get("slot_scores", [])}
         for slot in slots:
             start_key = slot.startIso.isoformat()
@@ -174,7 +219,7 @@ def _run_ai_inline(request_id: str, sfn_input: dict) -> Optional[dict]:
             ai_score = float(ai_entry.get("ai_score", slot.score))
             slot_dict["score"] = ai_score
             slot_dict["explanation"] = ai_entry.get("description", slot_dict.get("explanation", ""))
-            slot_dict["aiScored"] = True
+            slot_dict["aiScored"] = was_ai_scored
             _meeting_repo.write_slot(request_id, start_key, slot_dict)
 
         ai_best_iso = str(ai_result.get("best_slot", ""))
@@ -229,6 +274,36 @@ def _run_ai_inline(request_id: str, sfn_input: dict) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
+
+def dispatch_or_run_ai(request_id: str, sfn_input: dict) -> Optional[dict]:
+    """
+    Get AI fairness scoring OFF the request's critical path.
+
+    In Lambda: fire an async self-invocation and return None immediately — the
+    heuristic scores are already stored in DynamoDB, and the frontend's existing
+    poll picks up the AI scores once the background invocation writes them.
+
+    Locally (nothing to invoke) or if the async hand-off fails: run AI inline and
+    return the ai_fields so the caller can merge them into its own response.
+    """
+    account_id = os.environ.get("AWS_ACCOUNT_ID", "")
+    is_local = not account_id or os.environ.get("ENVIRONMENT") == "development"
+    if not is_local and _dispatch_ai_async(request_id, sfn_input):
+        return None
+    return _run_ai_inline(request_id, sfn_input)
+
+
+def run_ai_scoring_job(payload: dict) -> Optional[dict]:
+    """Entry point for the async AI-scoring self-invocation (see _dispatch_ai_async).
+    Routed here from sfn_router on the 'run_ai_scoring' action."""
+    request_id = payload.get("request_id")
+    sfn_input = payload.get("sfn_input", {})
+    if not request_id:
+        logger.warning("[ai_async] missing request_id in payload — skipping AI job")
+        return None
+    logger.info(f"[ai_async] running background AI scoring for {request_id}")
+    return _run_ai_inline(request_id, sfn_input)
+
 
 def run_or_schedule(
     meeting_data: models.MeetingCreateSchema, user_id: str
@@ -302,7 +377,11 @@ def run_or_schedule(
             except Exception as local_exc:
                 logger.warning(f"Local fallback after empty SFN failed for {meeting.requestId}: {local_exc}")
 
-    ai_fields = _run_ai_inline(meeting.requestId, sfn_input)
+    # Get AI scoring off this request's critical path: async self-invoke in
+    # Lambda, inline locally or if the hand-off fails. When dispatched async,
+    # ai_fields is None and we return right away with heuristic scores already
+    # stored in DynamoDB.
+    ai_fields = dispatch_or_run_ai(meeting.requestId, sfn_input)
 
     meeting_dict = meeting.model_dump(mode="json")
     if ai_fields:

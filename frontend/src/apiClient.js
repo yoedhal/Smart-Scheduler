@@ -14,8 +14,8 @@
  *
  * (Historical note: calls previously tunnelled through GET /health with the
  * token + payload in the query string to dodge the preflight entirely. That
- * workaround is retired now that the OPTIONS route handles preflight; /health
- * remains as a plain health check and transitional fallback.)
+ * workaround has been fully removed now that the OPTIONS route handles the
+ * preflight.)
  */
 
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -66,7 +66,7 @@ async function apiProxy(action, data = null, _isRetry = false) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || `HTTP ${res.status} at action=${action}`);
     }
-    // The health endpoint always returns HTTP 200 (to avoid CORS-blocked 5xx).
+    // /api/proxy always returns HTTP 200 (to avoid CORS-blocked 5xx).
     // Check the body's status field to detect backend errors.
     const body = await res.json();
     if (body?.status === 'error') {
@@ -98,8 +98,6 @@ export async function apiGet(path) {
     if (oauthUrlMatch) return apiProxy(`oauth_url:${oauthUrlMatch[1]}`, { redirect_origin: window.location.origin });
 
     if (path === '/api/profile/stats') return apiProxy('profile_stats');
-
-    if (path === '/api/activity') return apiProxy('activity_feed');
 
     if (path === '/api/users') return apiProxy('list_users');
 
@@ -170,11 +168,6 @@ export async function apiParseMeetingNL(text) {
     return apiProxy('parse_meeting_nl', { text });
 }
 
-/** Save (or clear) the user's .ics calendar feed URL. */
-export async function apiUpdateIcsUrl(icsUrl) {
-    return apiProxy('update_ics_url', { icsUrl });
-}
-
 /** Register (or renew) a Google Calendar push-notification watch channel. */
 export async function apiRegisterCalendarWatch() {
     return apiProxy('register_calendar_watch');
@@ -187,9 +180,4 @@ export async function apiRegisterCalendarWatch() {
  */
 export async function apiCheckCalendarSync() {
     return apiProxy('check_calendar_sync');
-}
-
-/** Stop the active watch channel (called automatically on Google Calendar disconnect). */
-export async function apiStopCalendarWatch() {
-    return apiProxy('stop_calendar_watch');
 }

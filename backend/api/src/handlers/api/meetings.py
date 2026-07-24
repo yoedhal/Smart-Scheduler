@@ -431,11 +431,14 @@ def handle_reschedule(identity: dict, action: str, data: str | None) -> dict:
     _meeting_repo.update_meta(request_id, meeting)
     _meeting_repo.delete_slots(request_id)
 
-    from src.handlers.api._scheduling import build_reschedule_payload, run_local_steps, _run_ai_inline
+    from src.handlers.api._scheduling import build_reschedule_payload, run_local_steps, dispatch_or_run_ai
     payload = build_reschedule_payload(meeting, user_id, request_id, search_days)
     run_local_steps(payload)
 
-    ai_fields = _run_ai_inline(request_id, payload)
+    # AI scoring off the critical path (async in Lambda). If it ran inline
+    # (local / fallback) we merge its fields now; the async job writes them to
+    # META itself.
+    ai_fields = dispatch_or_run_ai(request_id, payload)
     if ai_fields:
         meeting.update(ai_fields)
         _meeting_repo.update_meta(request_id, meeting)
@@ -465,6 +468,7 @@ def handle_score_slot(identity: dict, data: str | None) -> dict:
         participant_states = []
         participant_tz_offsets = []
         participant_working_days = []
+        participant_lunch_breaks = []
         for uid in all_ids:
             state = _user_repo.get_fairness(uid)
             if state:
@@ -473,6 +477,7 @@ def handle_score_slot(identity: dict, data: str | None) -> dict:
             if p:
                 participant_tz_offsets.append(get_tz_offset_hours(p.get("timezone", "UTC")))
                 participant_working_days.append(p.get("workingDays", [0, 1, 2, 3, 4]))
+                participant_lunch_breaks.append(p.get("lunchBreak"))
 
         user_profile = _user_repo.get_profile_raw(user_id)
         tz_offset = get_tz_offset_hours((user_profile or {}).get("timezone", "UTC"))
@@ -484,6 +489,7 @@ def handle_score_slot(identity: dict, data: str | None) -> dict:
             tz_offset_hours=tz_offset,
             participant_tz_offsets=participant_tz_offsets or None,
             participant_working_days=participant_working_days or None,
+            participant_lunch_breaks=participant_lunch_breaks or None,
             organizer_working_days=organizer_working_days,
         )
 

@@ -169,18 +169,3 @@ def handle_reset_fairness(identity: dict) -> dict:
         "lastUpdatedAt": now,
     })
     return {"fairnessScore": new_score, "meetingLoadMetrics": new_metrics}
-
-
-def handle_activity_feed(identity: dict) -> list:
-    try:
-        raw = _user_repo.get_recent_activity(identity["user_id"])
-        seen_profiles: dict = {}
-        for entry in raw:
-            actor_id = entry.get("by", "")
-            if actor_id and actor_id not in seen_profiles:
-                p = _user_repo.get_profile(actor_id)
-                seen_profiles[actor_id] = p.displayName if p else actor_id[:8]
-            entry["actorName"] = seen_profiles.get(actor_id, actor_id[:8])
-        return raw
-    except Exception:
-        return []

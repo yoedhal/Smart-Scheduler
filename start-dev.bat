@@ -21,7 +21,7 @@ start "Smart Scheduler Frontend" npm run dev
 echo.
 echo ==========================================
 echo Great Success! The system is starting up.
-echo Backend API: http://localhost:8000/api/health
+echo Backend API: http://localhost:8000
 echo Frontend UI: http://localhost:5173
 echo ==========================================
 echo.
