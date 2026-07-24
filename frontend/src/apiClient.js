@@ -1,20 +1,21 @@
 /**
  * apiClient.js
  *
- * CORS-safe API client for Smart Scheduler.
+ * API client for Smart Scheduler.
  *
- * WHY THIS EXISTS:
- * The API Gateway route ANY /{proxy+} has a Cognito JWT authorizer.
- * That authorizer returns 401 on OPTIONS pre-flight requests (which carry no
- * Bearer token), causing browsers to reject every cross-origin request.
- * The AWS Academy lab policy blocks all API Gateway modifications.
+ * TRANSPORT:
+ * All calls POST to /api/proxy with `Authorization: Bearer <accessToken>` and
+ * a JSON body { action, data }. The browser preflights this (non-simple
+ * request); the no-auth `OPTIONS /{proxy+}` route on the HTTP API answers the
+ * preflight with 2xx + CORS headers, bypassing the Cognito JWT authorizer that
+ * sits on `ANY /{proxy+}` and would otherwise 401 the OPTIONS. The backend
+ * validates the Cognito *access* token via cognito-idp:GetUser (no IAM needed)
+ * and dispatches on the `action` field.
  *
- * SOLUTION:
- * All calls are tunnelled through GET /health – a public route (no JWT
- * authorizer).  Plain GET requests with no custom headers are "simple
- * requests" under the CORS spec and never trigger a pre-flight check.
- * The backend validates the Cognito *access* token via cognito-idp:GetUser
- * (no IAM required) and dispatches based on the `action` query param.
+ * (Historical note: calls previously tunnelled through GET /health with the
+ * token + payload in the query string to dodge the preflight entirely. That
+ * workaround is retired now that the OPTIONS route handles preflight; /health
+ * remains as a plain health check and transitional fallback.)
  */
 
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -33,10 +34,13 @@ async function getAccessToken(forceRefresh = false) {
 
 /**
  * Core proxy call.
- * Builds: GET /health?action=<action>[&data=<json>]&token=<accessToken>
+ * POST /api/proxy  with  Authorization: Bearer <accessToken>  and JSON body
+ * { action, data }.
  *
- * Sending the token in a query param (not Authorization header) means the
- * browser treats this as a simple CORS request – no pre-flight.
+ * The token rides in the Authorization header (off the URL, out of access
+ * logs) and the payload in the body (no URL-length limit). The preflight this
+ * triggers is answered by the no-auth `OPTIONS /{proxy+}` route; the backend
+ * validates the access token itself via cognito-idp:GetUser.
  *
  * On a 401, automatically retries once with a force-refreshed token in case
  * the access token had just expired.
@@ -45,12 +49,14 @@ async function apiProxy(action, data = null, _isRetry = false) {
     const token = await getAccessToken(_isRetry);
     if (!token) throw new Error('Not authenticated');
 
-    const params = new URLSearchParams({ action, token });
-    if (data !== null) params.set('data', JSON.stringify(data));
-
-    const url = `${API_BASE}/health?${params.toString()}`;
-
-    const res = await fetch(url); // simple GET – no custom headers
+    const res = await fetch(`${API_BASE}/api/proxy`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action, data }),
+    });
     if (!res.ok) {
         // If 401 and we haven't retried yet, force-refresh the token and try once more
         if (res.status === 401 && !_isRetry) {

@@ -17,6 +17,12 @@ resource "aws_cognito_user_pool" "user_pool" {
     email_subject = "Account Confirmation"
     email_message = "Your confirmation code is {####}"
   }
+
+  # Guardrail: this pool holds all real users — never allow Terraform to destroy
+  # or replace it. Any plan that would require replacement will hard-error here.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_cognito_user_pool_client" "client" {
