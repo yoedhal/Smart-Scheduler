@@ -62,6 +62,7 @@ function AppContent({ theme, setTheme }) {
   const [targetProfile, setTargetProfile]       = useState(null);
   const [meetingPrefill, setMeetingPrefill]     = useState(null);
   const [showGlobalCreate, setShowGlobalCreate] = useState(false);
+  const [drafting, setDrafting] = useState(null);   // meeting being generated, if any
   const [selectedMeeting, setSelectedMeeting]   = useState(null);
   const [declineWizardId, setDeclineWizardId]   = useState(null);
   const [showPalette, setShowPalette]           = useState(false);
@@ -280,6 +281,33 @@ function AppContent({ theme, setTheme }) {
     }
   };
 
+  /**
+   * The wizard closes the moment "Find times" is pressed: the organiser lands on
+   * Meetings and watches a placeholder row while slot generation and AI scoring
+   * run. `drafting` holds just enough of the payload to render that row.
+   */
+  const handleCreateMeeting = async (payload) => {
+    setShowGlobalCreate(false);
+    setMeetingPrefill(null);
+    setDrafting({
+      title: payload.title,
+      /* Invitees are picked as people but sent as ids or emails, so neither list
+         alone is the headcount. */
+      invited: Math.max(payload.participantIds?.length || 0, payload.participantEmails?.length || 0),
+    });
+    setActiveView('meetings');
+    try {
+      const meeting = await apiPost('/api/meetings/create', payload);
+      await refreshAll();
+      toast(`Times are ready for “${payload.title}” — pick one to book it.`, 'success');
+      pollMeetingForAi(meeting?.requestId);
+    } catch (err) {
+      toast(err?.message || 'Could not create the meeting.', 'error');
+    } finally {
+      setDrafting(null);
+    }
+  };
+
   const handleParticipantClick = async (userId) => {
     if (!userId || userId === profile?.id) { setActiveView('profile'); return; }
     try {
@@ -448,6 +476,7 @@ function AppContent({ theme, setTheme }) {
             <Route path="/meetings" element={
               <MeetingsView
                 meetings={meetings}
+                drafting={drafting}
                 currentUserId={profile.id}
                 needsAction={needsAction}
                 isCalendarConnected={isCalendarConnected}
@@ -530,10 +559,7 @@ function AppContent({ theme, setTheme }) {
           users={users}
           currentUserId={profile?.id}
           onClose={() => { setShowGlobalCreate(false); setMeetingPrefill(null); }}
-          /* The meeting now exists; the modal stays open on its own so the
-             organiser can pick from the ranked times it just generated. */
-          onCreated={(requestId) => { refreshAll(); pollMeetingForAi(requestId); }}
-          onRefresh={refreshAll}
+          onSubmit={handleCreateMeeting}
         />
       )}
 

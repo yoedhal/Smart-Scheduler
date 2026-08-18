@@ -64,6 +64,8 @@ class MeetingRequest(BaseDBModel):
     durationMinutes: int
     dateRangeStart: datetime
     dateRangeEnd: datetime
+    # pending (no time booked) → awaiting (time booked, invitees still to accept)
+    # → confirmed (every invitee accepted). Plus cancelled.
     status: str = "pending"
     selectedSlotStart: Optional[str] = None
     acceptedBy: List[str] = []

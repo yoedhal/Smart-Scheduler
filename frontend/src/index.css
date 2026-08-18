@@ -161,6 +161,7 @@ h1,h2,h3,h4,h5,h6{margin:0;line-height:1.15}
 .dot{width:7px;height:7px;flex:none;display:inline-block;border-radius:50%}
 .dot.confirmed{background:var(--forest)}
 .dot.pending{background:var(--ochre)}
+.dot.awaiting{background:var(--signal)}
 .dot.declined,.dot.cancelled{background:var(--danger)}
 .dot.muted{background:var(--rule-2)}
 .st{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);display:inline-flex;align-items:center;gap:7px}
@@ -240,6 +241,12 @@ input[type="number"].inp{width:92px}
 .chip button{background:none;border:0;color:var(--ink-3);cursor:pointer;padding:0;font-size:14px;line-height:1}
 .chip button:hover{color:var(--danger)}
 .chip.on{background:var(--signal-soft);color:var(--signal)}
+/* Preset pickers carry the same signal blue as the primary buttons; the chosen
+   one keeps that fill and adds the focus-ring idiom used elsewhere. */
+.chip.pick{background:var(--signal);color:#fff;border:1px solid transparent;cursor:pointer;font-family:inherit;transition:box-shadow .14s,background .14s}
+.chip.pick:hover{background:var(--ink)}
+[data-theme="dark"] .chip.pick:hover{background:#fff;color:var(--paper)}
+.chip.pick.on{background:var(--signal);color:#fff;box-shadow:0 0 0 3px var(--signal-soft);font-weight:600}
 .chip-row{display:flex;flex-wrap:wrap;gap:7px}
 
 .day-t{width:38px;height:38px;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink-3);font-family:var(--font-mono);font-size:12px;cursor:pointer;border-radius:var(--pill);transition:all .14s}
@@ -328,10 +335,6 @@ input[type="number"].inp{width:92px}
 .callout.warn{background:var(--danger-soft)}
 .callout.warn .eyebrow{color:var(--danger)!important}
 .callout.click{cursor:pointer}
-.compute{padding:60px 26px;text-align:center}
-.compute-b{height:4px;background:var(--paper-4);max-width:260px;margin:22px auto 0;overflow:hidden;border-radius:var(--pill)}
-.compute-b i{display:block;height:100%;width:38%;background:var(--signal);border-radius:var(--pill);animation:sweep 1.05s cubic-bezier(.4,0,.2,1) infinite}
-@keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(360%)}}
 .fade{animation:up .32s cubic-bezier(.2,.7,.3,1) both}
 @keyframes up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .spin-sm{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;flex:none}

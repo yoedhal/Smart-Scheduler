@@ -2,8 +2,12 @@ import { useState, useMemo } from 'react';
 import { Ico, Stack, Score } from '../ui/Primitives.jsx';
 import {
   meetingCode, meetingScore, participantsOf, organiserOf,
-  fmtWhen, fmtDuration, needsMyAction, awaitsMyPick, isOrganiser, myStatusIn, isFuture,
+  fmtWhen, fmtDuration, needsMyAction, awaitsMyPick, isOrganiser, myStatusIn, isFuture, isBooked,
 } from '../lib/meetings';
+
+/* "Pending" covers everything not yet locked in — no time picked yet, or a time
+   picked that invitees have still to accept. */
+const isPending = (m) => m.status === 'pending' || m.status === 'awaiting';
 
 const FILTERS = [
   { id: 'all',       label: 'All'       },
@@ -14,7 +18,7 @@ const FILTERS = [
 ];
 
 export default function MeetingsView({
-  meetings, currentUserId, needsAction,
+  meetings, drafting, currentUserId, needsAction,
   isCalendarConnected, onConnectCalendar, onNewMeeting, onOpenMeeting,
 }) {
   const [filter, setFilter] = useState('all');
@@ -29,6 +33,8 @@ export default function MeetingsView({
       out = out.filter(m => m.status === 'cancelled');
     } else if (filter === 'all') {
       out = out.filter(m => m.status !== 'cancelled');
+    } else if (filter === 'pending') {
+      out = out.filter(isPending);
     } else {
       out = out.filter(m => m.status === filter);
     }
@@ -45,7 +51,7 @@ export default function MeetingsView({
     // Things that need a decision float up; then upcoming by time; then newest.
     const rank = (m) => {
       if (needsMyAction(m, currentUserId) || awaitsMyPick(m, currentUserId)) return 0;
-      if (m.status === 'confirmed' && isFuture(m.selectedSlotStart)) return 1;
+      if (isBooked(m) && isFuture(m.selectedSlotStart)) return 1;
       if (m.status === 'cancelled') return 3;
       return 2;
     };
@@ -62,10 +68,15 @@ export default function MeetingsView({
   const counts = useMemo(() => ({
     all: meetings.filter(m => m.status !== 'cancelled').length,
     needs: meetings.filter(m => needsMyAction(m, currentUserId) || awaitsMyPick(m, currentUserId)).length,
-    pending: meetings.filter(m => m.status === 'pending').length,
+    pending: meetings.filter(isPending).length,
     confirmed: meetings.filter(m => m.status === 'confirmed').length,
     cancelled: meetings.filter(m => m.status === 'cancelled').length,
   }), [meetings, currentUserId]);
+
+  /* The in-flight meeting lands as pending and needs the organiser's pick, so it
+     only belongs under the filters that would show it once it exists. */
+  const showDrafting = !!drafting && !query.trim()
+    && ['all', 'needs', 'pending'].includes(filter);
 
   /** What this row is waiting on, from this user's point of view. */
   const rowState = (m) => {
@@ -79,6 +90,10 @@ export default function MeetingsView({
     if (m.status === 'pending') return { cls: 'pending', label: 'pending' };
     const mine = myStatusIn(m, currentUserId);
     if (!isOrganiser(m, currentUserId) && mine === 'declined') return { cls: 'declined', label: 'you declined' };
+    if (m.status === 'awaiting') {
+      const waiting = (m.participantUserIds || []).length - (m.acceptedBy || []).length;
+      return { cls: 'awaiting', label: waiting > 0 ? `awaiting ${waiting}` : 'awaiting accepts' };
+    }
     return { cls: 'confirmed', label: 'confirmed' };
   };
 
@@ -110,7 +125,7 @@ export default function MeetingsView({
         <div className="callout click" style={{ marginTop: 22 }} onClick={() => setFilter('needs')}>
           <div className="eyebrow">Awaiting your response</div>
           <p>
-            {needsAction} confirmed meeting{needsAction > 1 ? 's are' : ' is'} waiting on your accept
+            {needsAction} booked meeting{needsAction > 1 ? 's are' : ' is'} waiting on your accept
             or decline. <b>Show them →</b>
           </p>
         </div>
@@ -139,7 +154,7 @@ export default function MeetingsView({
         </div>
       </div>
 
-      {list.length === 0 ? (
+      {list.length === 0 && !showDrafting ? (
         <div className="empty">
           {query ? `Nothing matches “${query}”.` : 'Nothing here.'}
         </div>
@@ -153,6 +168,25 @@ export default function MeetingsView({
               </tr>
             </thead>
             <tbody>
+              {/* The meeting the backend is still generating times for. */}
+              {showDrafting && (
+                <tr className="dim" style={{ cursor: 'default' }}>
+                  <td>
+                    <div className="t-title">{drafting.title}</div>
+                    <div className="t-sub">you organise · saving</div>
+                  </td>
+                  <td><span className="t-when">—</span></td>
+                  <td><span className="t-when">{drafting.invited} invited</span></td>
+                  <td><span className="t-when">—</span></td>
+                  <td><span className="t-when">—</span></td>
+                  <td>
+                    <span className="st act">
+                      <span className="spin-sm" style={{ width: 9, height: 9, borderWidth: 1.5 }} />
+                      finding times…
+                    </span>
+                  </td>
+                </tr>
+              )}
               {list.map(m => {
                 const state = rowState(m);
                 const org = organiserOf(m);

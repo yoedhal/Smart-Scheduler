@@ -3,9 +3,9 @@ import { Ico } from '../ui/Primitives.jsx';
 import { meetingCode } from '../lib/meetings';
 
 const REASONS = [
-  { key: 'personal', label: 'Personal',  hint: 'A personal commitment' },
-  { key: 'busy',     label: 'Busy',      hint: 'Clashes with my schedule' },
-  { key: 'other',    label: 'Something else', hint: 'Add a note for the organiser' },
+  { key: 'busy',     label: 'Busy',     hint: 'Clashes with my schedule' },
+  { key: 'personal', label: 'Personal', hint: 'A personal commitment' },
+  { key: 'other',    label: 'Custom',   hint: 'Write your own reason' },
 ];
 
 /**
@@ -26,8 +26,12 @@ export default function DeclineWizard({ meeting, onSubmit, onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, busy]);
 
+  /* "Custom" is only a reason once they have actually written one. */
+  const custom = reason === 'other';
+  const ready = !!reason && (!custom || comment.trim().length > 0);
+
   const submit = async () => {
-    if (!reason) return;
+    if (!ready) return;
     setBusy(true);
     setError(null);
     try {
@@ -85,15 +89,27 @@ export default function DeclineWizard({ meeting, onSubmit, onClose }) {
                   </button>
                 ))}
               </div>
-              {reason === 'other' && (
-                <textarea
-                  className="inp"
-                  style={{ marginTop: 12 }}
-                  maxLength={500}
-                  placeholder="Optional note for the organiser"
-                  value={comment}
-                  onChange={e => setComment(e.target.value)}
-                />
+              {reason && (
+                <>
+                  <div className="eyebrow" style={{ margin: '16px 0 8px' }}>
+                    {custom ? 'Your reason' : 'Note for the organiser (optional)'}
+                  </div>
+                  <textarea
+                    className="inp"
+                    autoFocus={custom}
+                    maxLength={500}
+                    placeholder={custom
+                      ? 'Tell the organiser why this time does not work'
+                      : 'Anything you want to add'}
+                    value={comment}
+                    onChange={e => setComment(e.target.value)}
+                  />
+                  {custom && (
+                    <div className="f-hint" style={{ marginTop: 6 }}>
+                      {comment.trim() ? `${comment.trim().length}/500` : 'A reason is required for a custom decline.'}
+                    </div>
+                  )}
+                </>
               )}
               {error && <p className="composer-err" style={{ marginTop: 12 }}>{error}</p>}
             </div>
@@ -129,7 +145,7 @@ export default function DeclineWizard({ meeting, onSubmit, onClose }) {
               <button className="btn g" onClick={() => setStep(1)} disabled={busy}>
                 <Ico n="back" s={13} /> Back
               </button>
-              <button className="btn d" onClick={submit} disabled={!reason || busy}>
+              <button className="btn d" onClick={submit} disabled={!ready || busy}>
                 {busy ? <><span className="spin-sm" /> Sending…</> : 'Decline meeting'}
               </button>
             </>
