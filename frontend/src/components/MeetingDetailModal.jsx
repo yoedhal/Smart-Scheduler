@@ -7,7 +7,7 @@ import EditMeetingModal from './EditMeetingModal.jsx';
 import {
   meetingCode, meetingScore, participantsOf, organiserOf, selectedSlot, slotsOf,
   fmtTime, fmtDate, fmtDay, fmtDateFull, fmtDuration, fmtSoon,
-  isOrganiser, needsMyAction, myStatusIn,
+  isOrganiser, needsMyAction, myStatusIn, isBooked, statusLabel, declineReason,
 } from '../lib/meetings';
 
 export default function MeetingDetailModal({
@@ -24,6 +24,9 @@ export default function MeetingDetailModal({
   const [ics, setIcs] = useState(null);
 
   const organiser = isOrganiser(meeting, currentUserId);
+  /* `timeBooked` = a time is on the books; `confirmed` = everyone has accepted
+     it. Anything about the chosen time keys off `timeBooked`, not `confirmed`. */
+  const timeBooked = isBooked(meeting);
   const confirmed = meeting.status === 'confirmed';
   const cancelled = meeting.status === 'cancelled';
   const booked = selectedSlot(meeting);
@@ -31,6 +34,9 @@ export default function MeetingDetailModal({
   const canAct = needsMyAction(meeting, currentUserId);
   const participants = participantsOf(meeting);
   const org = organiserOf(meeting);
+  /* Who the booked time is still waiting on. */
+  const unanswered = participants.filter(p =>
+    !(meeting.acceptedBy || []).includes(p.id) && !(meeting.declinedBy || []).includes(p.id));
 
   useEffect(() => {
     const onKey = (e) => {
@@ -42,9 +48,9 @@ export default function MeetingDetailModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, showEdit, ask]);
 
-  /* Other confirmed meetings that would clash with a proposal. */
+  /* Other booked meetings that would clash with a proposal. */
   const otherBookings = useMemo(() => allMeetings
-    .filter(m => m.status === 'confirmed' && m.requestId !== meeting.requestId && m.selectedSlotStart)
+    .filter(m => isBooked(m) && m.requestId !== meeting.requestId && m.selectedSlotStart)
     .map(m => ({
       title: m.title,
       start: new Date(m.selectedSlotStart).getTime(),
@@ -69,7 +75,7 @@ export default function MeetingDetailModal({
         `/api/meetings/${meeting.requestId}/book/${encodeURIComponent(slot.startIso)}`,
       );
       if (result?.calendarSyncWarning) toast(result.calendarSyncWarning, 'warning');
-      else toast('Time confirmed — participants have been notified.', 'success');
+      else toast(result?.message || 'Time booked — waiting on participants to accept.', 'success');
       if (result?.icsContent) setIcs(result.icsContent);
       await onRefresh?.();
       if (!result?.icsContent) onClose();
@@ -108,7 +114,7 @@ export default function MeetingDetailModal({
     try {
       const result = await apiPost(`/api/meetings/${meeting.requestId}/book_custom`, custom.scored);
       if (result?.calendarSyncWarning) toast(result.calendarSyncWarning, 'warning');
-      else toast('Custom time booked — participants have been notified.', 'success');
+      else toast('Custom time booked — waiting on participants to accept.', 'success');
       if (result?.icsContent) setIcs(result.icsContent);
       await onRefresh?.();
       if (!result?.icsContent) onClose();
@@ -152,7 +158,7 @@ export default function MeetingDetailModal({
   const statusLine = [
     meetingCode(meeting.requestId),
     fmtDuration(meeting.durationMinutes),
-    cancelled ? 'cancelled' : confirmed ? 'confirmed' : 'pending',
+    statusLabel(meeting),
     organiser ? 'you organise' : `organised by ${org.name}`,
   ].join(' · ');
 
@@ -169,7 +175,7 @@ export default function MeetingDetailModal({
           </div>
 
           <div className="mod-b">
-            {confirmed && meeting.selectedSlotStart && (
+            {timeBooked && meeting.selectedSlotStart && (
               <div className="f-row">
                 <div className="f-lab">When</div>
                 <div style={{ paddingTop: 7 }}>
@@ -226,12 +232,12 @@ export default function MeetingDetailModal({
                         </span>
                         {declined && detail?.reason && (
                           <span className="f-hint" style={{ display: 'block', margin: '3px 0 0', whiteSpace: 'normal' }}>
-                            {detail.reason}{detail.comment ? ` — ${detail.comment}` : ''}
+                            {declineReason(detail)}
                           </span>
                         )}
                       </span>
                       <span className={`prow-s ${accepted ? 'ok' : declined ? 'no' : 'wait'}`}>
-                        {accepted ? 'accepted' : declined ? 'declined' : confirmed ? 'awaiting' : 'invited'}
+                        {accepted ? 'accepted' : declined ? 'declined' : timeBooked ? 'awaiting' : 'invited'}
                       </span>
                     </button>
                   );
@@ -276,7 +282,7 @@ export default function MeetingDetailModal({
               </div>
             )}
 
-            {organiser && !confirmed && !cancelled && (
+            {organiser && !timeBooked && !cancelled && (
               <div style={{ paddingTop: 20 }}>
                 <SecHead
                   n="01"
@@ -307,7 +313,7 @@ export default function MeetingDetailModal({
                   <div className="callout warn">
                     <div className="eyebrow">Overlap</div>
                     <p>
-                      This time overlaps <b>{conflict.other.title}</b>, which you've already confirmed.
+                      This time overlaps <b>{conflict.other.title}</b>, which you've already booked.
                     </p>
                     <div style={{ display: 'flex', gap: 9, marginTop: 12 }}>
                       <button className="btn d sm" onClick={() => doBook(conflict.slot)} disabled={busy}>
@@ -358,12 +364,26 @@ export default function MeetingDetailModal({
               </div>
             )}
 
-            {!organiser && !confirmed && !cancelled && (
+            {!organiser && !timeBooked && !cancelled && (
               <div className="callout" style={{ marginTop: 18 }}>
                 <div className="eyebrow">Waiting on the organiser</div>
                 <p>
                   {org.name} is still choosing between {meeting.slots?.length || 0} proposed times.
                   You'll be asked to accept once one is picked.
+                </p>
+              </div>
+            )}
+
+            {timeBooked && !confirmed && !cancelled && (
+              <div className="callout" style={{ marginTop: 18 }}>
+                <div className="eyebrow">Awaiting accepts</div>
+                <p>
+                  The time is held on everyone's calendar, but{' '}
+                  {unanswered.length
+                    ? <b>{unanswered.map(p => (p.id === currentUserId ? 'you' : p.name)).join(', ')}</b>
+                    : 'someone'}{' '}
+                  {unanswered.length === 1 ? 'has' : 'have'} yet to respond. The meeting turns
+                  confirmed once every invitee has accepted.
                 </p>
               </div>
             )}
@@ -403,7 +423,7 @@ export default function MeetingDetailModal({
             </div>
 
             <div className="mod-f-r">
-              {organiser && !confirmed && !cancelled && chosen && (
+              {organiser && !timeBooked && !cancelled && chosen && (
                 <>
                   <span className="eyebrow">
                     {fmtDay(chosen.startIso)} {fmtTime(chosen.startIso)} · {Math.round(chosen.score ?? 0)}

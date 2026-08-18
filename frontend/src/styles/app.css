@@ -106,6 +106,7 @@
 [data-theme="dark"] .ev.confirmed{background:rgba(47,219,245,.14)}
 .ev.pending{background:rgba(155,69,214,.12);border-left-color:var(--ochre)}
 [data-theme="dark"] .ev.pending{background:rgba(206,134,255,.14)}
+.ev.awaiting{background:var(--signal-soft);border-left-color:var(--signal)}
 .ev.external{background:var(--paper-3);border-left-color:var(--rule-2);color:var(--ink-2)}
 .ev-t{font-size:11px;font-weight:500;line-height:1.25;letter-spacing:-.005em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev-m{font-family:var(--font-mono);font-size:9px;color:var(--ink-3);letter-spacing:.07em;margin-top:2px;text-transform:uppercase}

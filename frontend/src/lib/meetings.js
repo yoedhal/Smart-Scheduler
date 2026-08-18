@@ -77,10 +77,33 @@ export function meetingScore(meeting) {
 
 export const isOrganiser = (m, uid) => m?.userRole === 'organizer' || m?.creatorUserId === uid;
 
-/** A confirmed invitation this user has neither accepted nor declined. */
+/**
+ * A meeting with a time on the books: `awaiting` still needs accepts from some
+ * invitees, `confirmed` has them all. Both occupy the slot, so anything that
+ * cares about "is this time taken" asks this rather than testing for confirmed.
+ */
+export const isBooked = (m) => m?.status === 'awaiting' || m?.status === 'confirmed';
+
+/** Human label for a meeting's lifecycle state. */
+export const statusLabel = (m) =>
+  m?.status === 'awaiting' ? 'awaiting accepts' : (m?.status || 'pending');
+
+/**
+ * A decline as the organiser should read it. `other` carries no canned label —
+ * the note the decliner typed is the reason.
+ */
+export function declineReason(detail) {
+  if (!detail?.reason) return '';
+  const note = (detail.comment || '').trim();
+  if (detail.reason === 'other') return note || 'Something else';
+  const label = detail.reason === 'busy' ? 'Busy' : 'Personal';
+  return note ? `${label} — ${note}` : label;
+}
+
+/** A booked invitation this user has neither accepted nor declined. */
 export function needsMyAction(m, uid) {
   if (!m || isOrganiser(m, uid)) return false;
-  if (m.status !== 'confirmed') return false;
+  if (!isBooked(m)) return false;
   return !(m.acceptedBy || []).includes(uid) && !(m.declinedBy || []).includes(uid);
 }
 
@@ -91,10 +114,10 @@ export const awaitsMyPick = (m, uid) =>
 /** Clock reads live in this module so component bodies stay pure. */
 export const isFuture = (iso) => !!iso && new Date(iso).getTime() > Date.now();
 
-/** The soonest confirmed meeting still ahead of us. */
+/** The soonest booked meeting still ahead of us. */
 export function nextUpcoming(meetings) {
   return meetings
-    .filter(m => m.status === 'confirmed' && isFuture(m.selectedSlotStart))
+    .filter(m => isBooked(m) && isFuture(m.selectedSlotStart))
     .sort((a, b) => new Date(a.selectedSlotStart) - new Date(b.selectedSlotStart))[0] || null;
 }
 
@@ -196,13 +219,13 @@ export function weekAhead(meetings) {
   });
 }
 
-/** Total confirmed minutes booked inside the current week. */
+/** Total booked minutes inside the current week. */
 export function bookedThisWeek(meetings) {
   const mon = startOfWeek();
   const sun = new Date(mon);
   sun.setDate(mon.getDate() + 7);
   const list = meetings.filter(m =>
-    m.status === 'confirmed' &&
+    isBooked(m) &&
     m.selectedSlotStart &&
     new Date(m.selectedSlotStart) >= mon &&
     new Date(m.selectedSlotStart) < sun
@@ -231,7 +254,7 @@ export function buildActivity(meetings, currentUserId, limit = 7) {
         meeting: m,
       });
     }
-    if (m.status === 'confirmed' && m.selectedSlotStart && m.updatedAt) {
+    if (isBooked(m) && m.selectedSlotStart && m.updatedAt) {
       items.push({
         at: m.updatedAt,
         who: who(m, m.creatorUserId),

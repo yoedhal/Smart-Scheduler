@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { apiGet, apiRegisterCalendarWatch, apiCheckCalendarSync } from '../apiClient';
 import { useToast } from '../context/ToastContext.jsx';
 import { Ico } from '../ui/Primitives.jsx';
-import { fmtTime, fmtDuration, meetingCode } from '../lib/meetings';
+import { fmtTime, fmtDuration, meetingCode, statusLabel } from '../lib/meetings';
 
 const HOUR_START = 7;
 const HOUR_END = 22;
@@ -376,7 +376,7 @@ export default function CalendarView({
           <div className="pop" style={{ left: popover.x, top: popover.y }}>
             <div className="eyebrow">
               {popover.ev.meeting
-                ? `${meetingCode(popover.ev.meeting.requestId)} · ${popover.ev.kind}`
+                ? `${meetingCode(popover.ev.meeting.requestId)} · ${statusLabel(popover.ev.meeting)}`
                 : `From ${popover.ev.meta}`}
             </div>
             <h4>{popover.ev.title}</h4>

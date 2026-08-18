@@ -94,7 +94,7 @@ def handler(payload: dict) -> dict:
         except Exception as e:
             logger.warning(f"[sfn:generate_slots] calendar fetch failed uid={uid}: {e}")
 
-    # Supplement creator busy with confirmed Smart Scheduler meetings (covers
+    # Supplement creator busy with booked Smart Scheduler meetings (covers
     # users without a connected external calendar).
     request_id = payload.get("request_id", "")
     try:
@@ -102,7 +102,7 @@ def handler(payload: dict) -> dict:
         _mtg_repo = MeetingRepository()
         for m in _mtg_repo.get_user_meetings(creator_id):
             if (
-                m.status == "confirmed"
+                m.status in ("awaiting", "confirmed")
                 and m.selectedSlotStart
                 and m.requestId != request_id
             ):

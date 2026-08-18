@@ -4,7 +4,7 @@ import { Ico, Count, Stack, Score, SecHead } from '../ui/Primitives.jsx';
 import {
   meetingCode, meetingScore, participantsOf, fmtWhen, fmtDuration, fmtAgo, fmtAgoPhrase,
   weekAhead, bookedThisWeek, buildActivity, fairnessTrace, fairnessLabel,
-  needsMyAction, awaitsMyPick, nextUpcoming,
+  needsMyAction, awaitsMyPick, nextUpcoming, isBooked, statusLabel,
 } from '../lib/meetings';
 
 const EXAMPLES = [
@@ -78,7 +78,8 @@ export default function OverviewView({
   const balance = Math.round(profile?.details?.fairness_balance ?? 0);
 
   const active = useMemo(() => meetings.filter(m => m.status !== 'cancelled'), [meetings]);
-  const confirmed = useMemo(() => active.filter(m => m.status === 'confirmed'), [active]);
+  /* Anything with a time on the books — accepts may still be outstanding. */
+  const scheduled = useMemo(() => active.filter(isBooked), [active]);
   const recent = useMemo(
     () => [...active].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5),
     [active],
@@ -88,7 +89,7 @@ export default function OverviewView({
   const feed = useMemo(() => buildActivity(meetings, profile?.id), [meetings, profile?.id]);
   const trace = useMemo(() => fairnessTrace(score, thisWeekCount), [score, thisWeekCount]);
 
-  const nextUp = useMemo(() => nextUpcoming(confirmed), [confirmed]);
+  const nextUp = useMemo(() => nextUpcoming(scheduled), [scheduled]);
 
   const oldestOpen = useMemo(() => {
     const open = active.filter(m => needsMyAction(m, profile?.id) || awaitsMyPick(m, profile?.id));
@@ -176,8 +177,8 @@ export default function OverviewView({
         </div>
 
         <div className="metric click" onClick={() => onNavigate('calendar')}>
-          <div className="eyebrow">Confirmed</div>
-          <div className="metric-v"><Count to={confirmed.length} /></div>
+          <div className="eyebrow">Scheduled</div>
+          <div className="metric-v"><Count to={scheduled.length} /></div>
           <div className="metric-note">
             {nextUp ? `Next is ${fmtWhen(nextUp.selectedSlotStart)}.` : 'Nothing on the books yet.'}
           </div>
@@ -228,7 +229,7 @@ export default function OverviewView({
                               : m.slots?.length ? `${m.slots.length} slots` : '—'}
                           </span>
                         </td>
-                        <td><span className="st"><i className={`dot ${m.status}`} />{m.status}</span></td>
+                        <td><span className="st"><i className={`dot ${m.status}`} />{statusLabel(m)}</span></td>
                       </tr>
                     ))}
                   </tbody>

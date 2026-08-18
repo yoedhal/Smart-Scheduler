@@ -240,13 +240,13 @@ class UserRepository:
         recent_titles = []
         for mid in list(shared_ids)[:5]:
             m = self._db.get(f"MEET#{mid}", "META")
-            if m and m.get("status") == "confirmed":
+            if m and m.get("status") in ("awaiting", "confirmed"):
                 recent_titles.append(m.get("title", ""))
         return {"count": len(shared_ids), "recentTitles": recent_titles[:3]}
 
     def get_stats(self, user_id: str, meetings: List[models.MeetingRequest]) -> dict:
         total_organised = sum(1 for m in meetings if m.creatorUserId == user_id)
-        total_accepted = sum(1 for m in meetings if m.status == "confirmed")
+        total_accepted = sum(1 for m in meetings if m.status in ("awaiting", "confirmed"))
         total_cancelled = sum(1 for m in meetings if m.status == "cancelled")
         fairness_item = self._db.get(f"USER#{user_id}", "FAIRNESS")
         current_score = float(fairness_item.get("fairnessScore", 100)) if fairness_item else 100.0
@@ -335,16 +335,22 @@ class MeetingRepository:
             for s in slots:
                 batch.delete_item(Key={"PK": s["PK"], "SK": s["SK"]})
 
-    def confirm_slot(self, request_id: str, slot_start_iso: str) -> None:
-        """Conditional write — raises HTTP 409 if slot already confirmed."""
+    def confirm_slot(
+        self, request_id: str, slot_start_iso: str, new_status: str = "confirmed"
+    ) -> None:
+        """Conditional write — raises HTTP 409 if slot already booked.
+
+        `new_status` is normally `awaiting` (the invitees still have to accept);
+        it is `confirmed` only when there is nobody left to wait on.
+        """
         try:
             self._db.table.update_item(
                 Key={"PK": f"MEET#{request_id}", "SK": "META"},
-                UpdateExpression="SET #st = :confirmed, selectedSlotStart = :slot, updatedAt = :now",
+                UpdateExpression="SET #st = :booked, selectedSlotStart = :slot, updatedAt = :now",
                 ConditionExpression="attribute_not_exists(selectedSlotStart) OR #st = :pending",
                 ExpressionAttributeNames={"#st": "status"},
                 ExpressionAttributeValues={
-                    ":confirmed": "confirmed",
+                    ":booked": new_status,
                     ":slot": slot_start_iso,
                     ":now": datetime.now().isoformat(),
                     ":pending": "pending",

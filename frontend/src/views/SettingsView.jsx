@@ -71,6 +71,7 @@ export default function SettingsView({
   const stats = useMemo(() => ({
     total: meetings.length,
     confirmed: meetings.filter(m => m.status === 'confirmed').length,
+    awaiting: meetings.filter(m => m.status === 'awaiting').length,
     organised: meetings.filter(m => m.userRole === 'organizer').length,
     invited: meetings.filter(m => m.userRole === 'participant').length,
   }), [meetings]);
@@ -222,7 +223,7 @@ export default function SettingsView({
                   {STATUS_PRESETS.map(s => (
                     <button
                       key={s}
-                      className={`chip${draft.statusMessage === s ? ' on' : ''}`}
+                      className={`chip pick${draft.statusMessage === s ? ' on' : ''}`}
                       onClick={() => set({ statusMessage: s })}
                     >{s}</button>
                   ))}
@@ -418,7 +419,8 @@ export default function SettingsView({
             )}
 
             <div className="f-hint" style={{ marginTop: 16 }}>
-              {stats.total} meetings · {stats.confirmed} confirmed · {stats.organised} organised · {stats.invited} invited
+              {stats.total} meetings · {stats.confirmed} confirmed · {stats.awaiting} awaiting accepts ·{' '}
+              {stats.organised} organised · {stats.invited} invited
             </div>
           </section>
 
