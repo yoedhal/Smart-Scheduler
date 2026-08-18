@@ -1,179 +1,144 @@
 import { useState, useEffect } from 'react';
-import { Ban, X, ArrowLeft, Check } from 'lucide-react';
+import { Ico } from '../ui/Primitives.jsx';
+import { meetingCode } from '../lib/meetings';
 
 const REASONS = [
-  { key: 'personal', label: 'Personal',  hint: 'Personal commitment'           },
-  { key: 'busy',     label: 'Busy',      hint: 'Conflicts with my schedule'    },
-  { key: 'other',    label: 'Other',     hint: 'Something else'                },
+  { key: 'personal', label: 'Personal',  hint: 'A personal commitment' },
+  { key: 'busy',     label: 'Busy',      hint: 'Clashes with my schedule' },
+  { key: 'other',    label: 'Something else', hint: 'Add a note for the organiser' },
 ];
 
 /**
- * Multi-step decline wizard:
- *   1. Confirm   — "Are you sure?"
- *   2. Reason    — Personal / Busy / Other (optional comment when Other)
- *   3. Done      — confirmation
- *
- * Props:
- *   meeting       (optional) – the meeting being declined, for context (title)
- *   onSubmit(reason, comment) – async; throws to abort step transition
- *   onClose()                 – called on cancel / close / after Done
+ * Confirm → reason → done. The reason is stored against the meeting so the
+ * organiser can see why, and the backend reshuffles slots when everyone declines.
  */
 export default function DeclineWizard({ meeting, onSubmit, onClose }) {
-  const [step, setStep]         = useState(1);
-  const [reason, setReason]     = useState(null);
-  const [comment, setComment]   = useState('');
-  const [submitting, setSubmit] = useState(false);
-  const [error, setError]       = useState(null);
+  const [step, setStep] = useState(1);
+  const [reason, setReason] = useState(null);
+  const [comment, setComment] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [reshuffled, setReshuffled] = useState(false);
 
   useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape' && !submitting) onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, submitting]);
+  }, [onClose, busy]);
 
-  const handleSubmit = async () => {
+  const submit = async () => {
     if (!reason) return;
-    setSubmit(true);
+    setBusy(true);
     setError(null);
     try {
-      await onSubmit(reason, comment.trim() || null);
+      const result = await onSubmit(reason, comment.trim() || null);
+      setReshuffled(!!result?.reshuffled);
       setStep(3);
     } catch (err) {
-      setError(err?.message || 'Failed to submit decline');
+      setError(err?.message || 'Could not send the decline.');
     } finally {
-      setSubmit(false);
+      setBusy(false);
     }
   };
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={e => e.target === e.currentTarget && !submitting && onClose()}
-    >
-      <div className="modal-box confirm-box" style={{ minWidth: 380, maxWidth: 460 }}>
-        <div className="modal-head">
-          <h3>
-            <Ban size={16} style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} />
-            Decline Meeting
-          </h3>
-          <button className="modal-close" onClick={onClose} disabled={submitting}>
-            <X size={14} />
-          </button>
+    <div className="veil" onClick={e => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="mod" style={{ width: 480 }}>
+        <div className="mod-h">
+          <div>
+            <div className="eyebrow">
+              {meeting ? `${meetingCode(meeting.requestId)} · step ${step} of 3` : `Step ${step} of 3`}
+            </div>
+            <h2>{step === 3 ? 'Decline sent' : 'Decline meeting'}</h2>
+          </div>
+          <button className="x" onClick={onClose} disabled={busy}>×</button>
         </div>
 
-        {/* Step indicator */}
-        <div style={{ display: 'flex', gap: 6, padding: '0.5rem 1rem 0.25rem', justifyContent: 'center' }}>
-          {[1, 2, 3].map(n => (
-            <span
-              key={n}
-              style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: step >= n ? '#ef4444' : 'rgba(148,163,184,0.3)',
-                transition: 'background 200ms',
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="confirm-body" style={{ minHeight: 160 }}>
+        <div className="mod-b">
           {step === 1 && (
-            <>
-              <p style={{ marginBottom: '0.5rem' }}>
-                Are you sure you want to decline
-                {meeting?.title ? <> <strong>"{meeting.title}"</strong></> : ' this meeting'}?
+            <div style={{ paddingTop: 16 }}>
+              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-2)', margin: 0 }}>
+                Decline {meeting?.title ? <b style={{ color: 'var(--ink)' }}>{meeting.title}</b> : 'this meeting'}?
               </p>
-              <p style={{ fontSize: '0.78rem', opacity: 0.7 }}>
-                The organizer will be notified. If all invited users decline, the organizer will pick a new slot.
+              <p style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--ink-3)', marginTop: 12 }}>
+                The organiser is told, along with your reason. If everyone invited declines, the
+                scheduler generates a fresh set of times automatically.
               </p>
-              <div className="modal-actions" style={{ marginTop: '1rem' }}>
-                <button className="btn-cancel" onClick={onClose}>Cancel</button>
-                <button className="btn-danger" onClick={() => setStep(2)}>Continue</button>
-              </div>
-            </>
+            </div>
           )}
 
           {step === 2 && (
-            <>
-              <p style={{ marginBottom: '0.6rem', fontSize: '0.86rem' }}>Pick a reason:</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ paddingTop: 16 }}>
+              <div className="eyebrow" style={{ marginBottom: 12 }}>Why?</div>
+              <div style={{ display: 'grid', gap: 8 }}>
                 {REASONS.map(r => (
                   <button
                     key={r.key}
-                    type="button"
+                    className={`radio-card${reason === r.key ? ' on' : ''}`}
                     onClick={() => setReason(r.key)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '0.6rem 0.8rem',
-                      border: `1px solid ${reason === r.key ? '#ef4444' : 'rgba(148,163,184,0.25)'}`,
-                      background: reason === r.key ? 'rgba(239,68,68,0.08)' : 'transparent',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      color: 'inherit',
-                      transition: 'all 150ms',
-                      textAlign: 'left',
-                    }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{r.label}</div>
-                      <div style={{ fontSize: '0.74rem', opacity: 0.65 }}>{r.hint}</div>
+                    <div className="rc-top">
+                      <span className="rc-dot" />
+                      <span className="rc-name">{r.label}</span>
                     </div>
-                    {reason === r.key && <Check size={14} color="#ef4444" />}
+                    <div className="rc-desc">{r.hint}</div>
                   </button>
                 ))}
               </div>
               {reason === 'other' && (
                 <textarea
+                  className="inp"
+                  style={{ marginTop: 12 }}
+                  maxLength={500}
+                  placeholder="Optional note for the organiser"
                   value={comment}
                   onChange={e => setComment(e.target.value)}
-                  placeholder="(Optional) Add a short note for the organizer"
-                  maxLength={500}
-                  rows={2}
-                  style={{
-                    width: '100%', marginTop: '0.6rem',
-                    padding: '0.5rem', fontSize: '0.82rem',
-                    background: 'rgba(15,23,42,0.4)',
-                    border: '1px solid rgba(148,163,184,0.25)',
-                    borderRadius: 6, color: 'inherit', resize: 'vertical',
-                  }}
                 />
               )}
-              {error && (
-                <p style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '0.5rem' }}>{error}</p>
-              )}
-              <div className="modal-actions" style={{ marginTop: '0.9rem' }}>
-                <button className="btn-cancel" onClick={() => setStep(1)} disabled={submitting}>
-                  <ArrowLeft size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Back
-                </button>
-                <button
-                  className="btn-danger"
-                  onClick={handleSubmit}
-                  disabled={!reason || submitting}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-                >
-                  {submitting ? <><span className="btn-spinner" />Declining…</> : 'Decline Meeting'}
-                </button>
-              </div>
-            </>
+              {error && <p className="composer-err" style={{ marginTop: 12 }}>{error}</p>}
+            </div>
           )}
 
           {step === 3 && (
-            <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+            <div style={{ paddingTop: 22, textAlign: 'center' }}>
               <div style={{
-                width: 52, height: 52, borderRadius: '50%',
-                background: 'rgba(52,211,153,0.12)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0.25rem auto 0.75rem',
+                width: 54, height: 54, borderRadius: '50%', display: 'inline-grid',
+                placeItems: 'center', background: 'var(--signal-soft)', color: 'var(--signal)',
               }}>
-                <Check size={26} color="#34d399" />
+                <Ico n="check" s={24} />
               </div>
-              <p style={{ marginBottom: '0.3rem', fontWeight: 600 }}>Decline sent</p>
-              <p style={{ fontSize: '0.78rem', opacity: 0.7 }}>
-                The organizer has been notified.
+              <p style={{ fontSize: 13.5, marginTop: 16, marginBottom: 0 }}>The organiser has been notified.</p>
+              <p style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.6 }}>
+                {reshuffled
+                  ? 'Everyone invited has now declined, so a fresh set of times is being generated.'
+                  : 'They can pick a different time or go ahead without you.'}
               </p>
-              <div className="modal-actions" style={{ marginTop: '1rem', justifyContent: 'center' }}>
-                <button className="btn-cancel" onClick={onClose}>Close</button>
-              </div>
             </div>
+          )}
+        </div>
+
+        <div className="mod-f">
+          {step === 1 && (
+            <>
+              <button className="btn g" onClick={onClose}>Keep it</button>
+              <button className="btn d" onClick={() => setStep(2)}>Continue <Ico n="arrow" s={13} /></button>
+            </>
+          )}
+          {step === 2 && (
+            <>
+              <button className="btn g" onClick={() => setStep(1)} disabled={busy}>
+                <Ico n="back" s={13} /> Back
+              </button>
+              <button className="btn d" onClick={submit} disabled={!reason || busy}>
+                {busy ? <><span className="spin-sm" /> Sending…</> : 'Decline meeting'}
+              </button>
+            </>
+          )}
+          {step === 3 && (
+            <>
+              <span className="eyebrow">Done</span>
+              <button className="btn p" onClick={onClose}>Close</button>
+            </>
           )}
         </div>
       </div>
