@@ -149,6 +149,30 @@ function AppContent() {
       })
       .catch(() => {}); // silent failure during background polling
 
+  /**
+   * After a meeting is created, AI fairness scoring runs asynchronously in the
+   * backend (off the request's critical path). Briefly poll the meetings list so
+   * the AI "best slot" panel appears within seconds instead of waiting for the
+   * 60s background poll. Stops as soon as the target meeting has AI results
+   * (aiMethod populated), or after `attempts` tries.
+   */
+  const pollMeetingForAi = (requestId, { attempts = 10, intervalMs = 3000 } = {}) => {
+    if (!requestId) return;
+    let tries = 0;
+    const tick = async () => {
+      tries += 1;
+      try {
+        const data = await apiGet('/api/meetings');
+        const list = Array.isArray(data) ? data : (data?.meetings ?? []);
+        setMeetings(list);
+        setLastRefreshed(new Date());
+        if (list.find(m => m.requestId === requestId)?.aiMethod) return; // AI landed → stop
+      } catch { /* transient — keep trying */ }
+      if (tries < attempts) setTimeout(tick, intervalMs);
+    };
+    setTimeout(tick, intervalMs);
+  };
+
   /** Auto-poll meetings every 60 seconds when logged in. */
   useEffect(() => {
     if (!profile) return;
@@ -511,7 +535,7 @@ function AppContent() {
         <CreateMeetingModal
           prefill={meetingPrefill}
           onClose={() => { setShowGlobalCreate(false); setMeetingPrefill(null); }}
-          onCreated={() => { setShowGlobalCreate(false); setMeetingPrefill(null); navigate('/meetings'); refreshAll(); }}
+          onCreated={(requestId) => { setShowGlobalCreate(false); setMeetingPrefill(null); navigate('/meetings'); refreshAll(); pollMeetingForAi(requestId); }}
           onRefresh={refreshAll}
         />
       )}

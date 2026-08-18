@@ -89,13 +89,6 @@ resource "aws_apigatewayv2_route" "protected" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
-# --- Public Route (no auth – for health checks) ---
-resource "aws_apigatewayv2_route" "health" {
-  api_id    = aws_apigatewayv2_api.api_gateway.id
-  route_key = "GET /health"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-}
-
 # --- CORS preflight (no auth) ---
 # Explicit OPTIONS route so preflight requests bypass the JWT authorizer on
 # ANY /{proxy+}. A method-specific route wins over ANY, so browser preflights
@@ -107,9 +100,9 @@ resource "aws_apigatewayv2_route" "options_preflight" {
 }
 
 # --- Authenticated dispatch endpoint (no gateway authorizer; self-validates) ---
-# Real POST transport for the frontend: Authorization header + JSON body,
-# replacing the GET /health query-string tunnel. Uses NONE auth because the
-# backend validates the Cognito *access* token itself (cognito-idp:GetUser),
+# Real POST transport for the frontend: Authorization header + JSON body.
+# Uses NONE auth because the backend validates the Cognito *access* token
+# itself (cognito-idp:GetUser),
 # which the API Gateway JWT authorizer can't do for access tokens.
 resource "aws_apigatewayv2_route" "api_proxy" {
   api_id    = aws_apigatewayv2_api.api_gateway.id

@@ -40,7 +40,7 @@ class UserRepository:
         self._db.put(
             f"USER#{user_id}", "FAIRNESS",
             models.FairnessState(
-                userId=user_id, fairnessScore=100.0,
+                userId=user_id, fairnessScore= 50.0,
                 meetingLoadMetrics={
                     "meetings_this_week": 0,
                     "prime_slots_accepted": 0,
@@ -258,29 +258,6 @@ class UserRepository:
             "current_fairness_score": round(current_score, 1),
             "meetings_this_week": int(float(load_metrics.get("meetings_this_week", 0))),
         }
-
-    def get_recent_activity(self, user_id: str, limit: int = 12) -> List[dict]:
-        part_items = self._db.query_prefix(f"USER#{user_id}", "PART#")
-        part_items.sort(key=lambda x: x.get("addedAt", ""), reverse=True)
-        meeting_ids = [item.get("meetingId") for item in part_items if item.get("meetingId")]
-        meeting_ids = meeting_ids[:20]
-        all_logs: List[dict] = []
-        for mid in meeting_ids:
-            meeting = self._db.get(f"MEET#{mid}", "META")
-            if not meeting:
-                continue
-            meeting_title = meeting.get("title", "Meeting")
-            log_items = self._db.query_prefix(f"MEET#{mid}", "LOG#")
-            for log in log_items:
-                all_logs.append({
-                    "meetingId": mid,
-                    "meetingTitle": meeting_title,
-                    "action": log.get("action", ""),
-                    "by": log.get("by", ""),
-                    "at": log.get("at", ""),
-                })
-        all_logs.sort(key=lambda x: x.get("at", ""), reverse=True)
-        return all_logs[:limit]
 
 
 # ---------------------------------------------------------------------------
@@ -519,13 +496,6 @@ class CalendarRepository:
     def get_ics_url(self, user_id: str) -> str:
         profile = self._db.get(f"USER#{user_id}", "PROFILE")
         return (profile or {}).get("icsUrl", "")
-
-    def save_ics_url(self, user_id: str, ics_url: str) -> None:
-        data = self._db.get(f"USER#{user_id}", "PROFILE")
-        if not data:
-            return
-        data["icsUrl"] = ics_url
-        self._db.put(f"USER#{user_id}", "PROFILE", data)
 
     def save_oauth_state(self, user_id: str, provider: str, state: str) -> None:
         self._db.put(f"USER#{user_id}", f"OAUTH_STATE#{state}", {

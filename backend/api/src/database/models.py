@@ -55,14 +55,6 @@ class UserProfile(BaseDBModel):
     showFairnessScore: bool = True
     createdAt: datetime = Field(default_factory=datetime.now)
 
-
-class ConnectedCalendar(BaseDBModel):
-    provider: str
-    email: str
-    connectedAt: datetime = Field(default_factory=datetime.now)
-    scopes: List[str] = []
-
-
 class MeetingRequest(BaseDBModel):
     requestId: str
     creatorUserId: str
@@ -143,13 +135,4 @@ class FairnessState(BaseDBModel):
     inconvenientMeetingsCount: int
     lastUpdatedAt: datetime = Field(default_factory=datetime.now)
     lastWeekReset: Optional[str] = None
-
-
-class MeetingLogEntry(BaseDBModel):
-    requestId: str
-    action: str
-    by: str
-    at: datetime = Field(default_factory=datetime.now)
-    changes: Optional[Dict[str, Any]] = None
-
 

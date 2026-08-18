@@ -114,18 +114,6 @@ def handle_oauth_callback(identity: dict, action: str, data: str | None) -> dict
     raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
 
-def handle_ics_url(identity: dict, data: str | None) -> dict:
-    if not data:
-        raise HTTPException(status_code=400, detail="Missing data")
-    try:
-        payload = json.loads(data)
-        ics_url = payload.get("icsUrl", "").strip()
-        _cal_repo.save_ics_url(identity["user_id"], ics_url)
-        return {"status": "success"}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
 def handle_disconnect(identity: dict, action: str) -> dict:
     provider = action.split(":", 1)[1]
     user_id = identity["user_id"]
@@ -171,16 +159,6 @@ def handle_register_watch(identity: dict) -> dict:
     )
     _cal_repo.save_watch_channel(user_id, result["id"], result["resourceId"], expires_at)
     return {"status": "registered", "expiresAt": expires_at}
-
-
-def handle_stop_watch(identity: dict) -> dict:
-    """Stop the active watch channel for the current user."""
-    user_id = identity["user_id"]
-    channel = _cal_repo.get_watch_channel(user_id)
-    if channel:
-        calendar_client.stop_google_watch(user_id, channel["channelId"], channel["resourceId"])
-        _cal_repo.delete_watch_channel(user_id)
-    return {"status": "stopped"}
 
 
 def handle_check_sync(identity: dict) -> dict:

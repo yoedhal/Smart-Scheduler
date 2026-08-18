@@ -86,7 +86,7 @@ def _build_user_prompt(
                 "userId": p.get("userId", ""),
                 "displayName": p.get("displayName") or p.get("userId", ""),
                 "timezone": p.get("timezone", "UTC"),
-                "current_fairness_score": float(p.get("current_fairness_score", 100.0)),
+                "current_fairness_score": float(p.get("current_fairness_score", 50.0)),
                 "meetings_this_week": int(p.get("meetings_this_week", 0)),
                 "fairness_trend": p.get("fairness_trend", [])[:MAX_HISTORY_ENTRIES],
                 "calendar_density": _redact_events(

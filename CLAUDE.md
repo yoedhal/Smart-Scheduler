@@ -50,14 +50,15 @@ VITE_API_URL=https://5xv230dk19.execute-api.us-east-1.amazonaws.com npm run buil
 
 ## Architecture
 
-### Request Flow (Critical: CORS Proxy Pattern)
+### Request Flow (Single Proxy Endpoint)
 
-All frontend API calls go through a single public GET endpoint — **`GET /health`** — not the REST routes. This is intentional: the Cognito JWT authorizer on `ANY /{proxy+}` rejects CORS pre-flight OPTIONS requests with 401. Because AWS Academy blocks API Gateway policy changes, all calls tunnel through `/health` as simple GET requests (no pre-flight).
+All frontend API calls go through a single endpoint — **`POST /api/proxy`** — not the individual REST routes. The Cognito JWT authorizer on `ANY /{proxy+}` can't validate Cognito *access* tokens and rejects the CORS pre-flight OPTIONS with 401, so `/api/proxy` uses **no** gateway authorizer: a dedicated no-auth `OPTIONS /{proxy+}` route answers the pre-flight, and the backend validates the access token itself.
 
-- `apiClient.js` encodes the logical action + Cognito access token as query params: `GET /health?action=<action>&token=<jwt>[&data=<json>]`
-- The backend's `/health` handler in `main.py` validates the token via `cognito-idp:GetUser` (see `src/common/auth.py:validate_access_token`), then calls `src/handlers/api/dispatcher.py:dispatch`.
+- `apiClient.js` sends `POST /api/proxy` with the Cognito access token in the `Authorization: Bearer <jwt>` header and a JSON body `{ action, data }`. The token stays off the URL / out of access logs; the body has no URL-length limit.
+- The backend's `/api/proxy` handler in `main.py` validates the token via `cognito-idp:GetUser` (see `src/common/auth.py:validate_access_token`), then calls `src/handlers/api/dispatcher.py:dispatch`.
 - The response is always HTTP 200 — even for backend errors. Frontend must check `body.status === 'error'`.
-- `apiGet` / `apiPost` in `apiClient.js` are thin wrappers that map URL patterns to action strings.
+- On a 401 the client force-refreshes the access token and retries the request once.
+- `apiGet` / `apiPost` in `apiClient.js` are thin wrappers that map URL patterns to action strings (all ultimately `apiProxy` calls).
 
 Key action strings (full list in `apiClient.js`):
 
@@ -110,7 +111,7 @@ src/
 ### Lambda Dual-Dispatch (`main.py:handler`)
 
 1. **Step Functions invocations** — detected by `sfn_action` key → `sfn_router()` in `lambda_entry.py` → maps to the appropriate `workflow/` handler.
-2. **API Gateway invocations** — everything else → Mangum → FastAPI → `/health` → `dispatcher.dispatch()`.
+2. **API Gateway invocations** — everything else → Mangum → FastAPI → `/api/proxy` → `dispatcher.dispatch()`.
 
 **Local development shortcut:** When `AWS_ACCOUNT_ID` is not set (local uvicorn), `handle_create_meeting` skips Step Functions entirely and calls `_local_sim.run_simulation()` synchronously. This mirrors the full SFN workflow but runs in-process.
 
