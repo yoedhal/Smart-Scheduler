@@ -88,7 +88,7 @@ export default function SettingsView({
         setSaved(next);
         toast('Settings saved.', 'success');
       } else {
-        toast('Save did not go through — try again.', 'error');
+        toast('Save did not go through. Try again.', 'error');
       }
     } catch (err) {
       toast(err?.message || 'Failed to save settings.', 'error');
@@ -178,7 +178,7 @@ export default function SettingsView({
                   onChange={e => set({ displayName: e.target.value })}
                 />
                 {draft.displayName && !draft.displayName.includes(' ') && /[\d.]/.test(draft.displayName) && (
-                  <div className="f-hint">That looks like a username — a real name reads better to colleagues.</div>
+                  <div className="f-hint">That looks like a username. A real name reads better to colleagues.</div>
                 )}
               </div>
             </div>
@@ -359,10 +359,10 @@ export default function SettingsView({
               <div className="gauge-b">
                 <div style={{ fontSize: 13, fontWeight: 500 }}>
                   {balance > 0
-                    ? `+${balance} — you're owed a convenient slot`
+                    ? `+${balance}: you're owed a convenient slot`
                     : balance < 0
-                      ? `${balance} — you've been getting the good slots`
-                      : 'Level — neutral standing'}
+                      ? `${balance}: you've been getting the good slots`
+                      : 'Level: neutral standing'}
                 </div>
                 <div className="gauge-t">
                   <i className={`f-${tier(score)}`} style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
@@ -375,7 +375,7 @@ export default function SettingsView({
               <div className="brk">
                 <div>
                   <div className="brk-l">Off-hours meetings ×{details.inconvenient_count}</div>
-                  <div className="brk-d">Weekend or awkward hours — you took the hit</div>
+                  <div className="brk-d">Weekend or awkward hours: you took the hit</div>
                 </div>
                 <span className="brk-v up">credit</span>
               </div>
@@ -384,7 +384,7 @@ export default function SettingsView({
               <div className="brk">
                 <div>
                   <div className="brk-l">Prime-time meetings ×{details.convenient_count}</div>
-                  <div className="brk-d">Convenient slots — someone else compromised</div>
+                  <div className="brk-d">Convenient slots: someone else compromised</div>
                 </div>
                 <span className="brk-v dn">debit</span>
               </div>
@@ -393,7 +393,7 @@ export default function SettingsView({
               <div className="brk">
                 <div>
                   <div className="brk-l">Cancellations ×{details.cancellations_last_month}</div>
-                  <div className="brk-d">Last 30 days — disrupted others' plans</div>
+                  <div className="brk-d">Last 30 days: disrupted others' plans</div>
                 </div>
                 <span className="brk-v dn">−{details.cancellations_last_month * 5}</span>
               </div>

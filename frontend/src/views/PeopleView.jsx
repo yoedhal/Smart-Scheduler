@@ -51,7 +51,7 @@ export default function PeopleView({ users, meetings, currentUserId, onScheduleW
 
   const copyInvite = () => {
     navigator.clipboard
-      .writeText(`Join me on Smart Scheduler — fair meeting scheduling: ${window.location.origin}`)
+      .writeText(`Join me on Smart Scheduler for fair meeting scheduling: ${window.location.origin}`)
       .then(() => toast('Invite link copied.', 'success'))
       .catch(() => toast('Could not copy the link.', 'error'));
   };
@@ -99,7 +99,7 @@ export default function PeopleView({ users, meetings, currentUserId, onScheduleW
         <div className="empty">
           {users.length <= 1 ? (
             <>
-              No colleagues yet. People appear here once they sign up —{' '}
+              No colleagues yet. People appear here once they sign up.{' '}
               <button className="btn g sm" onClick={copyInvite}>copy the invite link</button>
             </>
           ) : `Nobody matches “${query || dept}”.`}
@@ -127,10 +127,10 @@ export default function PeopleView({ users, meetings, currentUserId, onScheduleW
                     </div>
                   </td>
                   <td><Score v={u.fairness_score} /></td>
-                  <td><span className="t-when">{u.role || '—'}</span></td>
-                  <td><span className="t-when">{u.department || '—'}</span></td>
-                  <td><span className="t-when">{u.count || '—'}</span></td>
-                  <td><span className="t-when">{u.last ? fmtAgo(u.last) : '—'}</span></td>
+                  <td><span className="t-when">{u.role || '-'}</span></td>
+                  <td><span className="t-when">{u.department || '-'}</span></td>
+                  <td><span className="t-when">{u.count || '-'}</span></td>
+                  <td><span className="t-when">{u.last ? fmtAgo(u.last) : '-'}</span></td>
                   <td>
                     <button
                       className="btn s sm"

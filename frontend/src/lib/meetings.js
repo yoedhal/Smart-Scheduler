@@ -97,7 +97,7 @@ export function declineReason(detail) {
   const note = (detail.comment || '').trim();
   if (detail.reason === 'other') return note || 'Something else';
   const label = detail.reason === 'busy' ? 'Busy' : 'Personal';
-  return note ? `${label} — ${note}` : label;
+  return note ? `${label}: ${note}` : label;
 }
 
 /** A booked invitation this user has neither accepted nor declined. */
@@ -141,7 +141,7 @@ export const fmtWhen = (iso) => (iso ? `${fmtDay(iso)} ${fmtTime(iso)}` : null);
 
 /** Duration label: 45 → "45 min", 90 → "1h 30m". */
 export function fmtDuration(min) {
-  if (!min) return '—';
+  if (!min) return '-';
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
   const m = min % 60;

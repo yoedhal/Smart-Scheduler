@@ -32,7 +32,7 @@ export default function AuthScreen({ theme, setTheme }) {
 
           <p className="auth-fine">
             Connecting a calendar is optional to sign in, but nothing gets scored without one.
-            Smart Scheduler reads availability only — event titles and attendees never leave your calendar.
+            Smart Scheduler reads availability only. Event titles and attendees never leave your calendar.
           </p>
 
           <div className="auth-foot">

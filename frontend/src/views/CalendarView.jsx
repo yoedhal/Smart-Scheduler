@@ -79,7 +79,7 @@ export default function CalendarView({
       setExtEvents([]);
       if (googleConnected && !tokenErrorShown.current) {
         tokenErrorShown.current = true;
-        toast('Could not sync Google Calendar — your token may have expired. Reconnect it in Settings.', 'warning');
+        toast('Could not sync Google Calendar. Your token may have expired. Reconnect it in Settings.', 'warning');
       }
     }
   };
