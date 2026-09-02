@@ -61,8 +61,8 @@ export default function EditMeetingModal({ meeting, onClose, onSaved }) {
         excludedWeekdays: excluded,
       });
       toast(
-        result?.slotsRegenerated ? 'Updated — new times generated.'
-          : result?.reopened ? 'Re-opened — participants must accept again.'
+        result?.slotsRegenerated ? 'Updated. New times generated.'
+          : result?.reopened ? 'Re-opened. Participants must accept again.'
             : 'Changes saved. Regenerate to get new times.',
         'success',
       );

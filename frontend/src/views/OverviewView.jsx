@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useToast } from '../context/ToastContext.jsx';
 import { Ico, Count, Stack, Score, SecHead } from '../ui/Primitives.jsx';
+import FairnessMeter from '../ui/FairnessMeter.jsx';
 import {
   meetingCode, meetingScore, participantsOf, fmtWhen, fmtDuration, fmtAgo, fmtAgoPhrase,
   weekAhead, bookedThisWeek, buildActivity, fairnessTrace, fairnessLabel,
@@ -13,11 +14,27 @@ const EXAMPLES = [
   'Hour-long planning review next week, skip Friday',
 ];
 
+/* Field grows with the text: one line, then a new line per wrap, up to a cap. */
+const LINE_H = 44;
+const MAX_H = 152;
+
 /** Plain-language meeting composer → parse_meeting_nl → pre-filled Create. */
 function Composer({ onParsed }) {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [multi, setMulti] = useState(false);
+  const box = useRef(null);
+
+  /* Reset to auto first, otherwise scrollHeight can only ever grow. */
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const wanted = el.scrollHeight;
+    el.style.height = `${Math.min(wanted, MAX_H)}px`;
+    setMulti(wanted > LINE_H);
+  }, [q]);
 
   const run = async (text) => {
     if (!text.trim() || busy) return;
@@ -27,7 +44,7 @@ function Composer({ onParsed }) {
       await onParsed(text);
       setQ('');
     } catch (e) {
-      setErr(e?.message || 'Could not read that — try naming who and roughly when.');
+      setErr(e?.message || 'Could not read that. Try naming who and roughly when.');
     } finally {
       setBusy(false);
     }
@@ -35,12 +52,21 @@ function Composer({ onParsed }) {
 
   return (
     <div className="composer">
-      <form className="composer-in" onSubmit={e => { e.preventDefault(); run(q); }}>
+      <form
+        className={`composer-in${multi ? ' multi' : ''}`}
+        onSubmit={e => { e.preventDefault(); run(q); }}
+      >
         <span className="composer-ico"><Ico n="spark" s={16} /></span>
-        <input
+        <textarea
+          ref={box}
+          rows={1}
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Describe a meeting — “45 min with Dana and Tom next Tuesday”"
+          onKeyDown={e => {
+            /* Enter sends, Shift+Enter breaks the line by hand. */
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(q); }
+          }}
+          placeholder="Describe a meeting, like “45 min with Dana and Tom next Tuesday”"
           disabled={busy}
           aria-label="Describe a meeting in plain words"
         />
@@ -120,8 +146,8 @@ export default function OverviewView({
           <h1 className="page-title">{greeting}, {firstName}</h1>
           <p className="page-sub">
             {todo > 0
-              ? `${todo} meeting${todo > 1 ? 's need' : ' needs'} a decision from you. Your fairness score sits at ${score} — ${fairnessLabel(score).toLowerCase()}.`
-              : `Nothing is waiting on you. Your fairness score sits at ${score} — ${fairnessLabel(score).toLowerCase()}.`}
+              ? `${todo} meeting${todo > 1 ? 's need' : ' needs'} a decision from you. Your fairness score sits at ${score}, ${fairnessLabel(score).toLowerCase()}.`
+              : `Nothing is waiting on you. Your fairness score sits at ${score}, ${fairnessLabel(score).toLowerCase()}.`}
           </p>
         </div>
         <div className="page-acts">
@@ -146,26 +172,9 @@ export default function OverviewView({
 
       <Composer onParsed={handleComposed} />
 
-      <div className="strip">
-        <div className="metric click" onClick={() => onNavigate('profile')}>
-          <div className="eyebrow">Fairness score</div>
-          <div className="metric-v">
-            <Count to={score} />
-            <span className="metric-d">
-              {balance === 0
-                ? <>level</>
-                : <span className={balance > 0 ? 'up' : 'dn'}>{balance > 0 ? '▲' : '▼'} {Math.abs(balance)}</span>}
-            </span>
-          </div>
-          <div className="metric-note">
-            {balance > 0
-              ? "In credit — you're owed a convenient slot."
-              : balance < 0
-                ? "In debt — you've had the good slots lately."
-                : 'Neutral standing. 50 is the resting point.'}
-          </div>
-        </div>
+      <FairnessMeter score={score} balance={balance} onClick={() => onNavigate('profile')} />
 
+      <div className="strip">
         <div className="metric click" onClick={() => onNavigate('meetings')}>
           <div className="eyebrow">Awaiting you</div>
           <div className="metric-v"><Count to={todo} /></div>
@@ -201,7 +210,7 @@ export default function OverviewView({
           <section className="sec">
             <SecHead n="01" title="Meetings" aside={`${active.length} active`} />
             {recent.length === 0 ? (
-              <div className="empty">No meetings yet — describe one above, or hit New meeting.</div>
+              <div className="empty">No meetings yet. Describe one above, or hit New meeting.</div>
             ) : (
               <div className="tbl-scroll">
                 <table className="tbl">
@@ -226,7 +235,7 @@ export default function OverviewView({
                           <span className="t-when">
                             {m.selectedSlotStart
                               ? fmtWhen(m.selectedSlotStart)
-                              : m.slots?.length ? `${m.slots.length} slots` : '—'}
+                              : m.slots?.length ? `${m.slots.length} slots` : '-'}
                           </span>
                         </td>
                         <td><span className="st"><i className={`dot ${m.status}`} />{statusLabel(m)}</span></td>
@@ -242,7 +251,7 @@ export default function OverviewView({
             <SecHead
               n="02"
               title="Week ahead"
-              aside={`${week[0].date.getDate()} — ${week[6].date.getDate()} ${week[6].date.toLocaleDateString('en-US', { month: 'short' })}`}
+              aside={`${week[0].date.getDate()} to ${week[6].date.getDate()} ${week[6].date.toLocaleDateString('en-US', { month: 'short' })}`}
             />
             <div className="week">
               {week.map(d => (
@@ -290,7 +299,7 @@ export default function OverviewView({
                   Balance decays 2% a day, so old history fades.
                 </>
               ) : (
-                <>No scored bookings yet. Everyone starts at 50 — accept an awkward slot and the
+                <>No scored bookings yet. Everyone starts at 50. Accept an awkward slot and the
                   balance moves in your favour.</>
               )}
               {' '}Curve reconstructed from your current balance, not stored history.
@@ -321,7 +330,7 @@ export default function OverviewView({
                 style={{ marginTop: 14 }}
                 onClick={() => {
                   navigator.clipboard
-                    .writeText(`Join me on Smart Scheduler — fair meeting scheduling: ${window.location.origin}`)
+                    .writeText(`Join me on Smart Scheduler for fair meeting scheduling: ${window.location.origin}`)
                     .then(() => toast('Invite link copied.', 'success'))
                     .catch(() => toast('Could not copy the link.', 'error'));
                 }}

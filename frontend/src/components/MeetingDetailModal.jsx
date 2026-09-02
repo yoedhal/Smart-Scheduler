@@ -75,7 +75,7 @@ export default function MeetingDetailModal({
         `/api/meetings/${meeting.requestId}/book/${encodeURIComponent(slot.startIso)}`,
       );
       if (result?.calendarSyncWarning) toast(result.calendarSyncWarning, 'warning');
-      else toast(result?.message || 'Time booked — waiting on participants to accept.', 'success');
+      else toast(result?.message || 'Time booked. Waiting on participants to accept.', 'success');
       if (result?.icsContent) setIcs(result.icsContent);
       await onRefresh?.();
       if (!result?.icsContent) onClose();
@@ -114,7 +114,7 @@ export default function MeetingDetailModal({
     try {
       const result = await apiPost(`/api/meetings/${meeting.requestId}/book_custom`, custom.scored);
       if (result?.calendarSyncWarning) toast(result.calendarSyncWarning, 'warning');
-      else toast('Custom time booked — waiting on participants to accept.', 'success');
+      else toast('Custom time booked. Waiting on participants to accept.', 'success');
       if (result?.icsContent) setIcs(result.icsContent);
       await onRefresh?.();
       if (!result?.icsContent) onClose();
@@ -144,7 +144,7 @@ export default function MeetingDetailModal({
     setBusy('reschedule');
     try {
       await apiPost(`/api/meetings/${meeting.requestId}/reschedule`);
-      toast('Reset to pending — new times are being generated.', 'info');
+      toast('Reset to pending. New times are being generated.', 'info');
       await onRefresh?.();
       setSel(0);
     } catch (err) {
@@ -257,8 +257,8 @@ export default function MeetingDetailModal({
                   <p>
                     <b style={{ color: 'var(--ink)' }}>
                       {meeting.aiBestSlotIso && !Number.isNaN(new Date(meeting.aiBestSlotIso).getTime())
-                        ? `${fmtDay(meeting.aiBestSlotIso)} ${fmtDate(meeting.aiBestSlotIso)}, ${fmtTime(meeting.aiBestSlotIso)} — `
-                        : 'Recommended — '}
+                        ? `${fmtDay(meeting.aiBestSlotIso)} ${fmtDate(meeting.aiBestSlotIso)}, ${fmtTime(meeting.aiBestSlotIso)}: `
+                        : 'Recommended: '}
                     </b>
                     {meeting.aiBestSlotReason}
                   </p>

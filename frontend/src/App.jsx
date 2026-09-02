@@ -127,7 +127,7 @@ function AppContent({ theme, setTheme }) {
         setLoading(false);
         signOut();
       } else {
-        setError(err.message || 'Connection error — check API Gateway');
+        setError(err.message || 'Connection error: check API Gateway');
         setLoading(false);
       }
     });
@@ -157,6 +157,12 @@ function AppContent({ theme, setTheme }) {
       })
       .catch(() => {}); // silent during background polling
 
+  /* Fairness moves when anyone books or cancels, so the meter needs its own tick. */
+  const refreshProfile = () =>
+    apiGet('/api/profile')
+      .then(setProfile)
+      .catch(() => {}); // silent during background polling
+
   /**
    * AI fairness scoring can land after the create response returns. Poll
    * briefly so the AI panel appears within seconds instead of on the 60s tick.
@@ -178,10 +184,10 @@ function AppContent({ theme, setTheme }) {
     setTimeout(tick, intervalMs);
   };
 
-  /* Auto-poll meetings every 60 seconds. */
+  /* Auto-poll meetings and fairness every 60 seconds. */
   useEffect(() => {
     if (!profile) return;
-    const id = setInterval(refreshMeetings, 60_000);
+    const id = setInterval(() => { refreshMeetings(); refreshProfile(); }, 60_000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
@@ -277,7 +283,7 @@ function AppContent({ theme, setTheme }) {
     setMeetingPrefill({ parsed });
     setShowGlobalCreate(true);
     if (parsed.unmatchedHints?.length) {
-      toast(`Couldn't match: ${parsed.unmatchedHints.join(', ')} — add them manually`, 'info');
+      toast(`Couldn't match: ${parsed.unmatchedHints.join(', ')}. Add them manually`, 'info');
     }
   };
 
@@ -299,7 +305,7 @@ function AppContent({ theme, setTheme }) {
     try {
       const meeting = await apiPost('/api/meetings/create', payload);
       await refreshAll();
-      toast(`Times are ready for “${payload.title}” — pick one to book it.`, 'success');
+      toast(`Times are ready for “${payload.title}”. Pick one to book it.`, 'success');
       pollMeetingForAi(meeting?.requestId);
     } catch (err) {
       toast(err?.message || 'Could not create the meeting.', 'error');
@@ -341,7 +347,7 @@ function AppContent({ theme, setTheme }) {
   const displayName = profile?.name || profile?.displayName || '';
   const scoreLabel = Number.isFinite(Number(profile?.fairness_score))
     ? Math.round(Number(profile.fairness_score))
-    : '—';
+    : '-';
 
   /* Keep the modal's meeting in sync with refreshed data. */
   const activeMeeting = selectedMeeting

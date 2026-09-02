@@ -77,7 +77,7 @@ export function Count({ to, ms = 620 }) {
 export function Stack({ people, max = 4 }) {
   const show = people.slice(0, max);
   const rest = people.length - show.length;
-  if (!people.length) return <span className="score-na">—</span>;
+  if (!people.length) return <span className="score-na">-</span>;
   return (
     <div className="stack">
       {show.map(p => <div key={p.id} className="mono-av" title={p.name}>{p.initials}</div>)}
@@ -86,9 +86,9 @@ export function Stack({ people, max = 4 }) {
   );
 }
 
-/** Fairness value 0–100 with a tinted bar. Renders an em-dash when unscored. */
+/** Fairness value 0–100 with a tinted bar. Renders a dash when unscored. */
 export function Score({ v }) {
-  if (v == null || Number.isNaN(v)) return <span className="score-na">—</span>;
+  if (v == null || Number.isNaN(v)) return <span className="score-na">-</span>;
   const n = Math.round(v);
   const t = tier(n);
   return (

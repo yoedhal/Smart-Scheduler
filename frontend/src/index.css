@@ -114,17 +114,42 @@ h1,h2,h3,h4,h5,h6{margin:0;line-height:1.15}
 @keyframes composer-lap{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.composer-in::before{animation:none}}
 .composer-ico{color:var(--signal);display:grid;place-items:center;flex:none}
-.composer-in input{flex:1;min-width:0;background:transparent;border:0;outline:none;font-family:var(--font-ui);font-size:14px;color:var(--ink);padding:6px 0}
-.composer-in input::placeholder{color:var(--ink-3)}
-.composer-in input:disabled{opacity:.6}
+.composer-in textarea{flex:1;min-width:0;height:33px;max-height:152px;background:transparent;border:0;outline:none;resize:none;overflow-y:auto;font-family:var(--font-ui);font-size:14px;line-height:1.5;color:var(--ink);padding:6px 0}
+.composer-in textarea::placeholder{color:var(--ink-3)}
+.composer-in textarea:disabled{opacity:.6}
+/* Wrapped onto a second line: square off the pill, icon to the top, send to the bottom. */
+.composer-in.multi{align-items:flex-start;border-radius:var(--r-xl);padding:12px 12px 12px 19px}
+.composer-in.multi .composer-ico{margin-top:7px}
+.composer-in.multi .btn{align-self:flex-end}
 .composer-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;padding-left:4px}
 .composer-eg{background:var(--paper-3);border:0;border-radius:var(--pill);padding:5px 12px;font-family:var(--font-ui);font-size:11.5px;color:var(--ink-2);cursor:pointer;transition:background .14s,color .14s}
 .composer-eg:hover:not(:disabled){background:var(--azure-soft);color:var(--azure)}
 .composer-eg:disabled{opacity:.5;cursor:default}
 .composer-err{font-size:11.5px;color:var(--danger)}
 
+/* ─── fairness meter ─── */
+/* --h is set inline per score: 145 green (deep debt) → 48 yellow (balanced) →
+   6 red (deep credit). Lightness lives here so both themes stay legible. */
+.meter{--ring:hsl(var(--h) calc(84% + 8% * var(--y)) calc(46% + 9% * var(--y)));--ring-ink:hsl(var(--h) calc(68% + 8% * var(--y)) calc(31% + 6% * var(--y)));
+  display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;margin-top:26px;padding:30px 26px 28px;background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--r-l);font-family:inherit;color:inherit}
+[data-theme="dark"] .meter{--ring:hsl(var(--h) calc(78% + 10% * var(--y)) calc(56% + 7% * var(--y)));--ring-ink:hsl(var(--h) calc(80% + 8% * var(--y)) calc(64% + 6% * var(--y)))}
+.meter.click{cursor:pointer;transition:border-color .14s}
+.meter.click:hover{border-color:var(--rule-2)}
+.meter-ring{position:relative;width:172px;height:172px;flex:none;margin-top:16px}
+.meter-ring svg{width:100%;height:100%;display:block}
+.meter-track{fill:none;stroke:var(--paper-4);stroke-width:9}
+.meter-fill{fill:none;stroke:var(--ring);stroke-width:9;stroke-linecap:round}
+.meter-tick{stroke:var(--paper-2);stroke-width:2}
+.meter-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;pointer-events:none}
+.meter-n{font-family:var(--font-display);font-size:54px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ring-ink)}
+.meter-u{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;color:var(--ink-3)}
+.meter-t{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;font-size:19px;font-weight:500;letter-spacing:-.005em;margin-top:20px}
+.meter-d{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:3px 10px;border-radius:var(--pill);background:var(--paper-3);color:var(--ring-ink);animation:up .32s cubic-bezier(.2,.7,.3,1) both}
+.meter-p{font-size:13px;color:var(--ink-2);line-height:1.6;margin:9px auto 0;max-width:48ch}
+.meter-f{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:15px}
+
 /* ─── metric strip ─── */
-.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 44px}
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0 44px}
 .metric{padding:20px 22px;background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--r-l)}
 .metric.click{cursor:pointer;transition:border-color .14s}
 .metric.click:hover{border-color:var(--rule-2)}

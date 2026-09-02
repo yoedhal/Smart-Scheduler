@@ -241,7 +241,7 @@ export default function CreateMeetingModal({
               )}
               <div className="f-hint">
                 {picked.length
-                  ? `${picked.length} invitee${picked.length > 1 ? 's' : ''} — their calendars and fairness balances are read when ranking times`
+                  ? `${picked.length} invitee${picked.length > 1 ? 's' : ''}: their calendars and fairness balances are read when ranking times`
                   : 'Pick at least one person to schedule with'}
               </div>
             </div>

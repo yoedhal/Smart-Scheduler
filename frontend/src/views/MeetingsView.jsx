@@ -175,10 +175,10 @@ export default function MeetingsView({
                     <div className="t-title">{drafting.title}</div>
                     <div className="t-sub">you organise · saving</div>
                   </td>
-                  <td><span className="t-when">—</span></td>
+                  <td><span className="t-when">-</span></td>
                   <td><span className="t-when">{drafting.invited} invited</span></td>
-                  <td><span className="t-when">—</span></td>
-                  <td><span className="t-when">—</span></td>
+                  <td><span className="t-when">-</span></td>
+                  <td><span className="t-when">-</span></td>
                   <td>
                     <span className="st act">
                       <span className="spin-sm" style={{ width: 9, height: 9, borderWidth: 1.5 }} />
@@ -210,7 +210,7 @@ export default function MeetingsView({
                       <span className="t-when">
                         {m.selectedSlotStart
                           ? fmtWhen(m.selectedSlotStart)
-                          : m.slots?.length ? `${m.slots.length} proposed` : '—'}
+                          : m.slots?.length ? `${m.slots.length} proposed` : '-'}
                       </span>
                     </td>
                     <td>
