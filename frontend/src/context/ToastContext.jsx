@@ -1,14 +1,14 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, XCircle, Info, AlertTriangle, X } from 'lucide-react';
+import { Ico } from '../ui/Primitives.jsx';
 
 const ToastContext = createContext(null);
 
 const ICONS = {
-  success: <CheckCircle2 size={15} />,
-  error:   <XCircle size={15} />,
-  info:    <Info size={15} />,
-  warning: <AlertTriangle size={15} />,
+  success: <Ico n="check" s={15} />,
+  error:   <Ico n="close" s={15} />,
+  info:    <Ico n="spark" s={15} />,
+  warning: <Ico n="alert" s={15} />,
 };
 
 export function ToastProvider({ children }) {
@@ -44,7 +44,7 @@ export function ToastProvider({ children }) {
               {ICONS[t.type] || ICONS.info}
               <span style={{ flex: 1 }}>{t.msg}</span>
               <button className="toast-item-close" onClick={() => dismiss(t.id)} aria-label="Dismiss">
-                <X size={12} />
+                <Ico n="close" s={12} />
               </button>
             </div>
           ))}

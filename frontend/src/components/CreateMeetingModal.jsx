@@ -1,283 +1,328 @@
-import { useState, useEffect, useRef } from 'react';
-import { apiPost, apiGet } from '../apiClient';
-import { CalendarPlus, X } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { apiGet } from '../apiClient';
 import { useToast } from '../context/ToastContext.jsx';
-import WizardStep1 from './createMeeting/WizardStep1.jsx';
-import WizardStep2 from './createMeeting/WizardStep2.jsx';
-import WizardStep3 from './createMeeting/WizardStep3.jsx';
+import { Ico } from '../ui/Primitives.jsx';
+import { fmtDate, fmtDay, fmtTime, fmtDuration, initials } from '../lib/meetings';
+
+const RANGES = [
+  { v: '3',  l: '3 days'  },
+  { v: '7',  l: '1 week'  },
+  { v: '14', l: '2 weeks' },
+  { v: '30', l: '1 month' },
+];
+
+const WINDOWS = [
+  { v: 'all',       l: 'Any time',  hours: null },
+  { v: 'morning',   l: 'Morning',   hours: [8, 9, 10, 11] },
+  { v: 'afternoon', l: 'Afternoon', hours: [12, 13, 14, 15, 16] },
+  { v: 'evening',   l: 'Evening',   hours: [17, 18, 19, 20] },
+];
+
+const DAY_KEYS = [['Mon', 0], ['Tue', 1], ['Wed', 2], ['Thu', 3], ['Fri', 4], ['Sat', 5], ['Sun', 6]];
+
+const windowForHour = (h) => (h <= 11 ? 'morning' : h <= 16 ? 'afternoon' : 'evening');
 
 /**
- * Global Create Meeting Modal.
- * Props:
- *   prefill      – string (email) or { datetime: ISO } or null
- *   onClose      – called when modal is dismissed without creating
- *   onCreated    – called after successful creation
- *   onRefresh    – refresh meetings list
+ * Single-step creation: describe the meeting, hit "Find times", and go.
+ *
+ * Slot generation and AI scoring both happen inside `create_meeting`, which can
+ * take several seconds, so the modal hands the payload to `onSubmit` and closes
+ * at once rather than holding the organiser on a spinner. The caller runs the
+ * request and drops them on Meetings, where the ranked times show up on the new
+ * meeting as soon as the backend answers.
  */
-export default function CreateMeetingModal({ prefill, onClose, onCreated, onRefresh }) {
-  const notify = useToast();
-  const [creating, setCreating] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
-  const [wizardDatetime, setWizardDatetime] = useState(null);
-  const [titleTouched, setTitleTouched] = useState(false);
-  const [newMeeting, setNewMeeting] = useState({
-    title: '', durationMinutes: 60, daysForward: 7, description: '',
-  });
+export default function CreateMeetingModal({
+  prefill, users = [], currentUserId, onClose, onSubmit,
+}) {
+  const toast = useToast();
+  const [directory, setDirectory] = useState(users);
+  const applied = useRef(false);
 
-  // Scheduling preferences state
-  const [schedPreset, setSchedPreset] = useState('7');      // '3','7','14','30','custom'
-  const [customFrom, setCustomFrom] = useState('');          // YYYY-MM-DD
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [duration, setDuration] = useState(45);
+  const [picked, setPicked] = useState([]);      // user objects
+  const [range, setRange] = useState('7');
   const [customDays, setCustomDays] = useState(14);
-  const [timeWindow, setTimeWindow] = useState('all');       // 'all','morning','afternoon','evening'
-  const [excludedWeekdays, setExcludedWeekdays] = useState([]); // [0-6]
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [window_, setWindow] = useState('all');
+  const [excluded, setExcluded] = useState([]);
+  const [query, setQuery] = useState('');
+  const [drafted, setDrafted] = useState(false);
+  const [seedTime, setSeedTime] = useState(null);
 
-  // User search state
-  const [allUsers, setAllUsers] = useState([]);
-  const [usersLoadError, setUsersLoadError] = useState(false);
-  const [selectedUsers, setSelectedUsers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const searchRef = useRef(null);
-  const dropdownRef = useRef(null);
+  const today = new Date().toISOString().slice(0, 10);
 
-  // Load all registered users once on mount
+  /* The directory usually arrives with the app; fetch only if it hasn't. */
   useEffect(() => {
-    apiGet('/api/users').then(data => {
-      const list = Array.isArray(data) ? data : (data?.users ?? []);
-      setAllUsers(list);
-    }).catch(() => setUsersLoadError(true));
-  }, []);
-
-  // Apply prefill on mount
-  useEffect(() => {
-    if (prefill) {
-      if (typeof prefill === 'object' && prefill?.parsed) {
-        // NL-parsed prefill from the command palette
-        const p = prefill.parsed;
-        setNewMeeting(m => ({
-          ...m,
-          title: p.title || m.title,
-          durationMinutes: p.durationMinutes || m.durationMinutes,
-          daysForward: p.daysForward || m.daysForward,
-          description: p.description || m.description,
-        }));
-        setTitleTouched(true);
-        // Apply scheduling range from parsed intent. If the LLM returned a specific
-        // start date, or a daysForward value that doesn't match a quick preset,
-        // switch the wizard to the Custom range and prefill its inputs.
-        const presetValues = ['3', '7', '14', '30'];
-        const dfStr = p.daysForward ? String(p.daysForward) : null;
-        if (p.dateRangeStart) {
-          setSchedPreset('custom');
-          setCustomFrom(p.dateRangeStart);
-          if (p.daysForward) setCustomDays(p.daysForward);
-        } else if (dfStr && presetValues.includes(dfStr)) {
-          setSchedPreset(dfStr);
-        } else if (p.daysForward) {
-          setSchedPreset('custom');
-          setCustomDays(p.daysForward);
-        }
-        // Time-of-day preference + excluded weekdays (Mon=0 … Sun=6)
-        if (['morning', 'afternoon', 'evening', 'all'].includes(p.timeWindow)) {
-          setTimeWindow(p.timeWindow);
-        }
-        if (Array.isArray(p.excludedWeekdays) && p.excludedWeekdays.length) {
-          const clean = Array.from(new Set(
-            p.excludedWeekdays
-              .map(d => parseInt(d, 10))
-              .filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
-          ));
-          setExcludedWeekdays(clean);
-        }
-        // Auto-expand advanced section so the user immediately sees the parsed prefs
-        if (
-          (p.timeWindow && p.timeWindow !== 'all') ||
-          (Array.isArray(p.excludedWeekdays) && p.excludedWeekdays.length)
-        ) {
-          setShowAdvanced(true);
-        }
-        // Resolve parsed participants against the loaded user list
-        (p.participants || []).forEach(parsedUser => {
-          const match = allUsers.find(u =>
-            u.userId === parsedUser.userId ||
-            (parsedUser.email && u.email === parsedUser.email)
-          );
-          if (match) addUser(match);
-        });
-      } else if (typeof prefill === 'object' && prefill?.datetime) {
-        setWizardDatetime(prefill.datetime);
-      } else if (typeof prefill === 'string') {
-        // Try to match a registered user by email
-        const match = allUsers.find(u => u.email === prefill || u.userId === prefill);
-        if (match) addUser(match);
-      }
-    }
+    if (users.length) { setDirectory(users); return; }
+    apiGet('/api/users')
+      .then(data => setDirectory(Array.isArray(data) ? data : []))
+      .catch(() => toast('Could not load the user directory.', 'error'));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allUsers]);
+  }, [users]);
 
-  // Close dropdown on outside click
+  /* Apply prefill once the directory is available so participants can resolve. */
   useEffect(() => {
-    const handler = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
-          searchRef.current && !searchRef.current.contains(e.target)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+    if (applied.current || !prefill) return;
+    applied.current = true;
 
-  // Escape key closes modal
+    if (typeof prefill === 'string') {
+      const match = directory.find(u => u.email === prefill || u.userId === prefill);
+      if (match) setPicked([match]);
+      return;
+    }
+
+    if (prefill.datetime) {
+      const dt = new Date(prefill.datetime);
+      setStartDate(dt.toISOString().slice(0, 10));
+      setRange('3');
+      setWindow(windowForHour(dt.getHours()));
+      setSeedTime(dt);
+      return;
+    }
+
+    const p = prefill.parsed;
+    if (!p) return;
+    setDrafted(true);
+    if (p.title) setTitle(p.title);
+    if (p.description) setDescription(p.description);
+    if (p.durationMinutes) setDuration(p.durationMinutes);
+    if (p.dateRangeStart) { setStartDate(p.dateRangeStart); setRange('custom'); setCustomDays(p.daysForward || 7); }
+    else if (p.daysForward) {
+      const s = String(p.daysForward);
+      if (RANGES.some(r => r.v === s)) setRange(s);
+      else { setRange('custom'); setCustomDays(p.daysForward); }
+    }
+    if (WINDOWS.some(w => w.v === p.timeWindow)) setWindow(p.timeWindow);
+    if (Array.isArray(p.excludedWeekdays) && p.excludedWeekdays.length) {
+      setExcluded([...new Set(p.excludedWeekdays.map(Number).filter(d => d >= 0 && d <= 6))]);
+    }
+    if (Array.isArray(p.participants) && p.participants.length) {
+      const resolved = p.participants
+        .map(pp => directory.find(u => u.userId === pp.userId || u.email === pp.email) || pp)
+        .filter(Boolean);
+      setPicked(resolved);
+    }
+  }, [prefill, directory]);
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const addUser = (user) => {
-    if (!selectedUsers.find(u => u.userId === user.userId)) {
-      setSelectedUsers(prev => [...prev, user]);
-    }
-    setSearchQuery('');
-    setDropdownOpen(false);
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return directory
+      .filter(u => (u.userId || u.id) !== currentUserId)
+      .filter(u => !picked.some(p => (p.userId || p.id) === (u.userId || u.id)))
+      .filter(u =>
+        (u.displayName || u.name || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [query, directory, picked, currentUserId]);
+
+  const daysForward = range === 'custom'
+    ? Math.max(1, Math.min(90, Number(customDays) || 7))
+    : parseInt(range, 10);
+  const preferredHours = WINDOWS.find(w => w.v === window_)?.hours;
+
+  const nameOf = (u) => u.displayName || u.name || u.email;
+
+  /* Fire and forget: the caller owns the request from here, so the organiser is
+     never held on a spinner while the scheduler and the AI reviewer run. */
+  const create = () => {
+    if (!title.trim() || picked.length === 0) return;
+    onSubmit({
+      title: title.trim(),
+      description,
+      durationMinutes: Number(duration),
+      participantIds: picked.map(u => u.userId || u.id).filter(Boolean),
+      participantEmails: picked.map(u => u.email).filter(Boolean),
+      daysForward,
+      ...(startDate ? { dateRangeStart: startDate } : {}),
+      ...(preferredHours ? { preferredHours } : {}),
+      ...(excluded.length ? { excludedWeekdays: excluded } : {}),
+    });
   };
 
-  const removeUser = (userId) => {
-    setSelectedUsers(prev => prev.filter(u => u.userId !== userId));
-  };
-
-  const filteredUsers = searchQuery.trim()
-    ? allUsers.filter(u => {
-        if (selectedUsers.find(s => s.userId === u.userId)) return false;
-        const q = searchQuery.toLowerCase();
-        const name = (u.displayName || u.name || '').toLowerCase();
-        const email = (u.email || '').toLowerCase();
-        return name.includes(q) || email.includes(q);
-      }).slice(0, 8)
-    : [];
-
-  // Derive scheduling params from UI state
-  const daysForward = schedPreset === 'custom' ? Math.max(1, Math.min(90, customDays)) : parseInt(schedPreset);
-  const dateRangeStart = schedPreset === 'custom' && customFrom ? customFrom : undefined;
-  const preferredHours = timeWindow === 'morning'   ? [8, 9, 10, 11]
-                       : timeWindow === 'afternoon' ? [12, 13, 14, 15, 16]
-                       : timeWindow === 'evening'   ? [17, 18, 19, 20]
-                       : null;
-
-  const schedLabel = schedPreset === 'custom'
-    ? `${daysForward} days${customFrom ? ` from ${customFrom}` : ''}`
-    : schedPreset === '3' ? '3 days' : schedPreset === '7' ? '1 week'
-    : schedPreset === '14' ? '2 weeks' : '1 month';
-
-  const timeLabel = timeWindow === 'morning' ? 'Morning (8–12)'
-                  : timeWindow === 'afternoon' ? 'Afternoon (12–17)'
-                  : timeWindow === 'evening' ? 'Evening (17–20)'
-                  : 'All hours';
-
-  const toggleWeekday = (d) => setExcludedWeekdays(prev =>
-    prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]
-  );
-
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    if (selectedUsers.length === 0) return;
-    setCreating(true);
-    try {
-      const created = await apiPost('/api/meetings/create', {
-        title: newMeeting.title,
-        description: newMeeting.description || '',
-        durationMinutes: Number(newMeeting.durationMinutes),
-        participantEmails: selectedUsers.map(u => u.email),
-        participantIds: selectedUsers.map(u => u.userId),
-        daysForward,
-        ...(dateRangeStart ? { dateRangeStart } : {}),
-        ...(preferredHours ? { preferredHours } : {}),
-        ...(excludedWeekdays.length ? { excludedWeekdays } : {}),
-      });
-      notify('Meeting created! AI is optimizing slots…', 'success');
-      onRefresh?.();
-      onCreated?.(created?.requestId ?? null);
-    } catch (err) {
-      notify(err?.message || 'Failed to create meeting', 'error');
-      console.error(err);
-    } finally {
-      setCreating(false);
-    }
-  };
+  const canContinue = title.trim().length > 0 && picked.length > 0;
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
-        <div className="modal-head">
-          <h3><CalendarPlus size={16} style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} />New Meeting Request</h3>
-          <button className="modal-close" onClick={onClose}><X size={14} /></button>
+    <div className="veil" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="mod" style={{ width: 600 }}>
+        <div className="mod-h">
+          <div>
+            <div className="eyebrow">
+              Details{drafted ? ' · drafted from your words' : ''}
+            </div>
+            <h2>New meeting</h2>
+          </div>
+          <button className="x" onClick={onClose}>×</button>
         </div>
-        <form onSubmit={handleCreate} className="modal-form">
-          {/* Wizard step indicator */}
-          <div className="wizard-steps">
-            {[1,2,3].map(n => (
-              <div key={n} className={`wizard-dot${wizardStep >= n ? ' done' : ''}${wizardStep === n ? ' active' : ''}`} />
-            ))}
-            <span className="wizard-label">Step {wizardStep} of 3</span>
+
+        <div className="mod-b">
+          {seedTime && (
+            <div className="callout sig" style={{ marginTop: 14 }}>
+              <div className="eyebrow">Starting from your calendar click</div>
+              <p>
+                Searching around {fmtDay(seedTime)} {fmtDate(seedTime)}, {fmtTime(seedTime)}.
+                The scheduler still ranks every viable time in the range.
+              </p>
+            </div>
+          )}
+
+          <div className="f-row">
+            <div className="f-lab">Title</div>
+            <input
+              className="inp" autoFocus maxLength={200} value={title}
+              placeholder="Q3 roadmap review"
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+            />
           </div>
 
-          {wizardStep === 1 && (
-            <WizardStep1
-              newMeeting={newMeeting}
-              setNewMeeting={setNewMeeting}
-              titleTouched={titleTouched}
-              setTitleTouched={setTitleTouched}
-              onCancel={onClose}
-              onNext={() => setWizardStep(2)}
-            />
-          )}
+          <div className="f-row">
+            <div className="f-lab">Duration</div>
+            <div className="seg mono" style={{ marginTop: 4 }}>
+              {[15, 30, 45, 60, 90].map(d => (
+                <button key={d} className={duration === d ? 'on' : ''} onClick={() => setDuration(d)}>
+                  {d < 60 ? `${d}m` : d === 60 ? '1h' : '1.5h'}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {wizardStep === 2 && (
-            <WizardStep2
-              wizardDatetime={wizardDatetime}
-              selectedUsers={selectedUsers}
-              addUser={addUser}
-              removeUser={removeUser}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              dropdownOpen={dropdownOpen}
-              setDropdownOpen={setDropdownOpen}
-              filteredUsers={filteredUsers}
-              usersLoadError={usersLoadError}
-              searchRef={searchRef}
-              dropdownRef={dropdownRef}
-              schedPreset={schedPreset}
-              setSchedPreset={setSchedPreset}
-              customFrom={customFrom}
-              setCustomFrom={setCustomFrom}
-              customDays={customDays}
-              setCustomDays={setCustomDays}
-              timeWindow={timeWindow}
-              setTimeWindow={setTimeWindow}
-              excludedWeekdays={excludedWeekdays}
-              toggleWeekday={toggleWeekday}
-              showAdvanced={showAdvanced}
-              setShowAdvanced={setShowAdvanced}
-              onBack={() => setWizardStep(1)}
-              onNext={() => setWizardStep(3)}
-            />
-          )}
+          <div className="f-row">
+            <div className="f-lab">Participants</div>
+            <div>
+              {picked.length > 0 && (
+                <div className="chip-row" style={{ marginBottom: 10 }}>
+                  {picked.map(u => (
+                    <span key={u.userId || u.id || u.email} className="chip">
+                      <span className="mono-av" style={{ width: 20, height: 20, fontSize: 8 }}>
+                        {initials(nameOf(u))}
+                      </span>
+                      {nameOf(u)}
+                      <button onClick={() => setPicked(picked.filter(p => p !== u))}>×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <input
+                className="inp"
+                placeholder="Search colleagues by name or email…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  if (matches[0]) { setPicked([...picked, matches[0]]); setQuery(''); }
+                }}
+              />
+              {query.trim() && (
+                <div className="plist">
+                  {matches.length === 0 ? (
+                    <div className="f-hint">No registered colleague matches “{query}”.</div>
+                  ) : matches.map(u => (
+                    <button
+                      key={u.userId || u.id}
+                      className="prow"
+                      onClick={() => { setPicked([...picked, u]); setQuery(''); }}
+                    >
+                      <div className="mono-av">{initials(nameOf(u))}</div>
+                      <span className="prow-n">{nameOf(u)}</span>
+                      <span className="prow-s">{u.email}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="f-hint">
+                {picked.length
+                  ? `${picked.length} invitee${picked.length > 1 ? 's' : ''}: their calendars and fairness balances are read when ranking times`
+                  : 'Pick at least one person to schedule with'}
+              </div>
+            </div>
+          </div>
 
-          {wizardStep === 3 && (
-            <WizardStep3
-              newMeeting={newMeeting}
-              setNewMeeting={setNewMeeting}
-              selectedUsers={selectedUsers}
-              schedLabel={schedLabel}
-              timeWindow={timeWindow}
-              timeLabel={timeLabel}
-              excludedWeekdays={excludedWeekdays}
-              creating={creating}
-              onBack={() => setWizardStep(2)}
+          <div className="f-row">
+            <div className="f-lab">Search range</div>
+            <div>
+              <div className="seg mono">
+                {[...RANGES, { v: 'custom', l: 'Custom' }].map(r => (
+                  <button key={r.v} className={range === r.v ? 'on' : ''} onClick={() => setRange(r.v)}>
+                    {r.l}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  type="date" className="inp" min={today} value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+                {range === 'custom' && (
+                  <input
+                    type="number" min={1} max={90} className="inp" value={customDays}
+                    onChange={e => setCustomDays(Math.max(1, Math.min(90, parseInt(e.target.value, 10) || 1)))}
+                  />
+                )}
+              </div>
+              <div className="f-hint">
+                Searching {daysForward} day{daysForward > 1 ? 's' : ''}
+                {startDate ? ` from ${fmtDate(`${startDate}T12:00:00`)}` : ' from today'}
+              </div>
+            </div>
+          </div>
+
+          <div className="f-row">
+            <div className="f-lab">Time of day</div>
+            <div className="seg mono" style={{ marginTop: 4 }}>
+              {WINDOWS.map(w => (
+                <button key={w.v} className={window_ === w.v ? 'on' : ''} onClick={() => setWindow(w.v)}>
+                  {w.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="f-row">
+            <div className="f-lab">Skip days</div>
+            <div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {DAY_KEYS.map(([label, idx]) => (
+                  <button
+                    key={idx} title={label}
+                    className={`day-t${excluded.includes(idx) ? ' off' : ''}`}
+                    onClick={() => setExcluded(x => x.includes(idx) ? x.filter(d => d !== idx) : [...x, idx])}
+                  >{label[0]}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="f-row">
+            <div className="f-lab">Agenda</div>
+            <textarea
+              className="inp" maxLength={2000} value={description}
+              placeholder="What will you discuss? Any context or links…"
+              onChange={e => setDescription(e.target.value)}
             />
-          )}
-        </form>
+          </div>
+        </div>
+
+        <div className="mod-f">
+          <span className="eyebrow">
+            {picked.length} calendar{picked.length === 1 ? '' : 's'} · {fmtDuration(duration)}
+          </span>
+          <div className="mod-f-r">
+            <button className="btn s" onClick={onClose}>Cancel</button>
+            <button className="btn p" onClick={create} disabled={!canContinue}>
+              Find times <Ico n="arrow" s={13} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
