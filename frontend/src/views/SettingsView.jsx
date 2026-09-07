@@ -43,7 +43,7 @@ const addMins = (t, m) => {
 
 export default function SettingsView({
   profile, meetings, calendarStatus, theme, setTheme,
-  onCalendarConnect, onCalendarDisconnect, onProfileUpdate, onSignOut, initialTab,
+  onCalendarConnect, onCalendarDisconnect, onDemoModeChange, onProfileUpdate, onSignOut, initialTab,
 }) {
   const toast = useToast();
   const [draft, setDraft] = useState(() => draftFrom(profile));
@@ -52,6 +52,7 @@ export default function SettingsView({
   const [skillInput, setSkillInput] = useState('');
   const [resetting, setResetting] = useState(false);
   const [disconnectAsk, setDisconnectAsk] = useState(null);
+  const [demoBusy, setDemoBusy] = useState(false);
   const calendarRef = useRef(null);
 
   /* Deep link from "connect your calendar" prompts. */
@@ -130,6 +131,20 @@ export default function SettingsView({
   const activeDays = draft.workingDays.length;
   const google = calendarStatus?.google;
   const ics = calendarStatus?.ics;
+  const demo = calendarStatus?.demo;
+  const demoOn = demo?.enabled === true;
+  const demoPeople = (demoOn ? demo?.users : demo?.available) || [];
+
+  const toggleDemo = async (next) => {
+    setDemoBusy(true);
+    try {
+      await onDemoModeChange(next);
+    } catch {
+      toast('Could not switch demo mode.', 'error');
+    } finally {
+      setDemoBusy(false);
+    }
+  };
 
   return (
     <div className="page fade">
@@ -458,6 +473,30 @@ export default function SettingsView({
                 <button className="btn s" onClick={() => setDisconnectAsk('ics')}>Disconnect</button>
               </div>
             )}
+
+            <div className="f-row wide">
+              <div>
+                <div className="f-name" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <i className={`dot ${demoOn ? 'confirmed' : 'muted'}`} />
+                  Demo mode
+                </div>
+                <div className="f-hint">
+                  {demoOn
+                    ? 'Two mock colleagues are in your directory. Invite them to see slot scoring react to real conflicts.'
+                    : 'Adds two mock colleagues with synthetic calendars so you can demo meeting creation without connecting anyone.'}
+                </div>
+                {demoOn && demoPeople.length > 0 && (
+                  <div className="f-hint" style={{ marginTop: 6 }}>
+                    {demoPeople.map(u => `${u.displayName} — ${u.summary}`).join(' · ')}
+                  </div>
+                )}
+              </div>
+              <Toggle
+                label="Demo mode"
+                on={demoOn}
+                onChange={v => { if (!demoBusy) toggleDemo(v); }}
+              />
+            </div>
           </section>
 
           <section className="sec">

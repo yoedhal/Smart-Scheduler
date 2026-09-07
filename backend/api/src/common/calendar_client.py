@@ -459,7 +459,9 @@ def get_user_busy_slots(user_id: str, date_start: datetime, date_end: datetime) 
     ics_url = _cal_repo.get_ics_url(user_id)
     if ics_url:
         return get_ics_events(ics_url, time_min, time_max)
-    return []
+    # Demo-mode colleagues — returns [] for every user without a MOCKCAL record.
+    from src.common import mock_calendar
+    return mock_calendar.get_mock_events(user_id, time_min, time_max)
 
 
 def write_meeting_to_calendars(creator_id: str, participant_ids: List[str],
@@ -468,7 +470,14 @@ def write_meeting_to_calendars(creator_id: str, participant_ids: List[str],
     Best-effort: write a confirmed meeting to every participant's connected calendar.
     Returns {"event_ids": {userId: externalEventId}, "failed": [userId, ...]}.
     """
-    all_ids = list({creator_id} | set(participant_ids))
+    from src.common import mock_calendar
+
+    # Demo colleagues have no Google account — the confirmed meeting is written
+    # only to the calendars of real, connected users.
+    all_ids = [
+        uid for uid in ({creator_id} | set(participant_ids))
+        if not mock_calendar.is_mock_user(uid)
+    ]
     attendee_emails = []
     for uid in all_ids:
         tokens_g = _cal_repo.get_oauth_tokens(uid, 'google')

@@ -85,6 +85,7 @@ src/
 │   ├── calendar_client.py   # Google Calendar OAuth2 + Outlook .ics integration
 │   ├── dynamo.py            # DynamoDB client singleton (get_db())
 │   ├── openai_client.py     # AI slot scoring + NL meeting parsing (gpt-4.1-nano, stdlib urllib only)
+│   ├── mock_calendar.py     # Demo-mode personas — synthetic calendars, no network
 │   └── timezone.py          # get_tz_offset_hours()
 ├── core/
 │   ├── fairness.py          # FairnessEngine class + global `engine` singleton
@@ -98,6 +99,7 @@ src/
     │   ├── meetings.py      # handle_create_meeting, handle_book, handle_accept, etc.
     │   ├── profile.py       # handle_profile, handle_update_profile, handle_list_users, etc.
     │   ├── calendar.py      # handle_calendar_status, handle_oauth_url, handle_oauth_callback, etc.
+    │   ├── demo.py          # Demo mode: provisions two mock colleagues on toggle
     │   ├── _scheduling.py   # Slot generation helpers used by meetings.py
     │   └── _local_sim.py    # Local development simulator (no real AWS calls)
     ├── lambda_entry.py      # sfn_router() — Step Functions event dispatch
@@ -128,6 +130,31 @@ Key actions:
 | `book:<id>:<slot>`, `accept:<id>`, `decline:<id>`, `cancel:<id>`, `edit:<id>`, `reschedule:<id>`, `book_custom:<id>`, `meeting_log:<id>` | `meetings.py` |
 | `calendar_status`, `calendar_events`, `oauth_url:<p>`, `oauth_callback:<p>`, `calendar_disconnect:<p>`, `update_ics_url`, `register_calendar_watch`, `stop_calendar_watch`, `check_calendar_sync` | `calendar.py` |
 | `reset_fairness`, `get_public_profile:<id>`, `shared_meetings:<id>` | `profile.py` |
+| `demo_status`, `demo_enable`, `demo_disable` | `demo.py` |
+
+### Demo Mode (`src/handlers/api/demo.py` + `src/common/mock_calendar.py`)
+
+A per-user toggle (Settings → Calendars) that provisions two mock colleagues —
+`demo-dana` and `demo-omer` — as real users with synthetic calendars, so meeting
+creation can be demoed without anyone connecting Google.
+
+- `mock_calendar.PERSONAS` holds each persona's weekly busy pattern in local time.
+  It is expanded relative to the requested window at read time, so the calendars
+  are never stale. Dana's mornings and Omer's afternoons are blocked, they share
+  a Tuesday all-hands (the one majority conflict), and Omer has an all-day Friday.
+- `calendar_client.get_user_busy_slots` falls back to `mock_calendar.get_mock_events`
+  after Google and .ics, so mock busy blocks flow into `generate_slots`, the fairness
+  engine and the AI scorer unchanged. It returns `[]` for users without a MOCKCAL record.
+- `list_users` hides the demo users from accounts with demo mode off; disabling demo
+  mode leaves their records in place because past meetings may reference them.
+- Demo colleagues auto-accept (`_demo_auto_accepts` / `_record_demo_accepts` in
+  `meetings.py`) the moment a time is booked — nobody can sign in as them — so a
+  booking with only demo invitees goes straight to `confirmed`. Their fairness moves
+  exactly as a real accept would; an edit re-accepts without double-counting it.
+- `write_meeting_to_calendars` filters out mock users, so a confirmed meeting is
+  written only to the real organizer's (and any real participant's) Google Calendar.
+- `calendar_status` gains `demo: {enabled, users}` and `mock: {connected, persona}`.
+  The frontend treats demo mode as a connected calendar so creation is not gated.
 
 ### Step Functions Workflow
 
@@ -188,6 +215,8 @@ Single-table design (`SmartScheduler_V1`). Three repository classes: `UserReposi
 - `PK=MEET#<requestId>`, `SK=AIHIST#<ts>` — AI scoring audit trail (TTL 90 days)
 - `PK=USER#<id>`, `SK=AIFAIRHIST#<ts>` — per-user AI fairness trajectory (TTL 365 days)
 - `PK=GCAL_CHANNEL#<channelId>`, `SK=LOOKUP` — reverse lookup: channelId → userId
+- `PK=USER#<id>`, `SK=MOCKCAL` — demo persona assignment (synthetic calendar)
+- `PK=USER#<id>`, `SK=DEMOMODE` — per-user demo-mode flag
 
 `BaseDBModel` in `models.py` has a `model_validator` that recursively converts `Decimal` → `int`/`float` on every DynamoDB read. All writes must convert floats → `Decimal` before storing.
 

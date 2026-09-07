@@ -116,8 +116,12 @@ def handle_profile_stats(identity: dict) -> dict:
 
 
 def handle_list_users(identity: dict) -> list:
+    from src.handlers.api import demo as _demo
     try:
         users = _user_repo.get_all_users(identity["user_id"])
+        # Demo colleagues are only visible to accounts that turned demo mode on.
+        if not _demo.is_enabled(identity["user_id"]):
+            users = [u for u in users if not _demo.is_demo_user(u.get("userId", ""))]
         return [
             {
                 "userId": u.get("userId", ""),
@@ -130,6 +134,7 @@ def handle_list_users(identity: dict) -> list:
                 "fairness_score": u.get("fairness_score", 100.0),
                 "skills": u.get("skills", []),
                 "statusMessage": u.get("statusMessage", ""),
+                "isDemo": _demo.is_demo_user(u.get("userId", "")),
             }
             for u in users
         ]

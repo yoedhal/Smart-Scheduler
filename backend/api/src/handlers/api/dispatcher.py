@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from src.handlers.api import calendar as _cal
+from src.handlers.api import demo as _demo
 from src.handlers.api import meetings as _mtg
 from src.handlers.api import profile as _prf
 
@@ -24,6 +25,9 @@ def dispatch(action: str, identity: dict, data: str | None) -> dict:
         "profile_stats":        lambda: _prf.handle_profile_stats(identity),
         "list_users":           lambda: _prf.handle_list_users(identity),
         "reset_fairness":       lambda: _prf.handle_reset_fairness(identity),
+        "demo_status":          lambda: _demo.handle_demo_status(identity),
+        "demo_enable":          lambda: _demo.handle_demo_enable(identity),
+        "demo_disable":         lambda: _demo.handle_demo_disable(identity),
     }
     if action in EXACT:
         return EXACT[action]()
