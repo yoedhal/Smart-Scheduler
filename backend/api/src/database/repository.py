@@ -86,6 +86,18 @@ class UserRepository:
         data = self._db.get(f"USER#{user_id}", "FAIRNESS")
         return models.FairnessState(**data) if data else None
 
+    @staticmethod
+    def _fairness_is_pinned(user_id: str) -> bool:
+        """Mock users hold a neutral 50 forever.
+
+        Demo colleagues auto-accept every booking, so letting their balance move
+        would drift them off 50 over a demo without anyone choosing anything on
+        their behalf. Pinning them keeps the equity_bonus a demo shows off
+        driven by the real participants.
+        """
+        from src.common import mock_calendar
+        return mock_calendar.is_mock_user(user_id)
+
     def update_fairness_for_single(
         self,
         user_id: str,
@@ -94,6 +106,8 @@ class UserRepository:
     ) -> None:
         """Update one participant's fairness using their personal impact value."""
         from src.core.fairness import engine
+        if self._fairness_is_pinned(user_id):
+            return
         try:
             fairness = self.get_fairness(user_id)
             if not fairness:
@@ -135,6 +149,8 @@ class UserRepository:
     def reverse_fairness_for_single(self, user_id: str) -> None:
         """Undo the last booking's fairness delta for one user."""
         from src.core.fairness import engine
+        if self._fairness_is_pinned(user_id):
+            return
         try:
             fairness = self.get_fairness(user_id)
             if not fairness:
@@ -173,6 +189,8 @@ class UserRepository:
     def update_fairness_on_cancel(self, user_id: str) -> None:
         """Add a cancellation timestamp to the organizer's fairness record (expires in 30 days)."""
         from src.core.fairness import engine
+        if self._fairness_is_pinned(user_id):
+            return
         fairness = self.get_fairness(user_id)
         if not fairness:
             return
