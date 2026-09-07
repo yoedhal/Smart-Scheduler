@@ -168,6 +168,16 @@ export async function apiParseMeetingNL(text) {
     return apiProxy('parse_meeting_nl', { text });
 }
 
+/** Demo mode — two mock colleagues with synthetic calendars. */
+export async function apiDemoStatus() {
+    return apiProxy('demo_status');
+}
+
+/** Turn demo mode on (provisions the mock colleagues) or off (hides them). */
+export async function apiSetDemoMode(enabled) {
+    return apiProxy(enabled ? 'demo_enable' : 'demo_disable');
+}
+
 /** Register (or renew) a Google Calendar push-notification watch channel. */
 export async function apiRegisterCalendarWatch() {
     return apiProxy('register_calendar_watch');

@@ -6,7 +6,7 @@ import '@aws-amplify/ui-react/styles.css';
 import './styles/app.css';
 
 import awsConfig from './aws-exports';
-import { apiGet, apiPost, apiParseMeetingNL } from './apiClient';
+import { apiGet, apiPost, apiParseMeetingNL, apiSetDemoMode } from './apiClient';
 import { useToast } from './context/ToastContext.jsx';
 import { Ico } from './ui/Primitives.jsx';
 import { initials, needsMyAction, awaitsMyPick } from './lib/meetings';
@@ -225,7 +225,9 @@ function AppContent({ theme, setTheme }) {
   /* Close the mobile drawer on navigation. */
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
-  const isCalendarConnected = calendarStatus?.google?.connected === true;
+  const demoMode = calendarStatus?.demo?.enabled === true;
+  // Demo mode stands in for a real calendar so a demo runs on a fresh account.
+  const isCalendarConnected = calendarStatus?.google?.connected === true || demoMode;
 
   const requireCalendar = () => {
     if (isCalendarConnected) return true;
@@ -256,6 +258,22 @@ function AppContent({ theme, setTheme }) {
     } catch {
       toast('Failed to disconnect the calendar.', 'error');
     }
+  };
+
+  const handleDemoModeChange = async (enabled) => {
+    await apiSetDemoMode(enabled);
+    const [status, directory] = await Promise.all([
+      apiGet('/api/calendar/status').catch(() => null),
+      apiGet('/api/users').catch(() => null),
+    ]);
+    if (status) setCalendarStatus(status);
+    if (Array.isArray(directory)) setUsers(directory);
+    toast(
+      enabled
+        ? 'Demo mode on — two mock colleagues added to your directory.'
+        : 'Demo mode off — back to real calendars only.',
+      'info',
+    );
   };
 
   const handleNewMeeting = () => {
@@ -521,6 +539,7 @@ function AppContent({ theme, setTheme }) {
                 setTheme={setTheme}
                 onCalendarConnect={handleCalendarConnect}
                 onCalendarDisconnect={handleCalendarDisconnect}
+                onDemoModeChange={handleDemoModeChange}
                 onProfileUpdate={setProfile}
                 onSignOut={signOut}
                 initialTab={location.state?.initialTab}
