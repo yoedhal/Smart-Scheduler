@@ -66,7 +66,7 @@ function Composer({ onParsed }) {
             /* Enter sends, Shift+Enter breaks the line by hand. */
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(q); }
           }}
-          placeholder="Describe a meeting, like “45 min with Dana and Tom next Tuesday”"
+          placeholder="Describe a meeting, like “45 min with Jensen and Tom next Tuesday”"
           disabled={busy}
           aria-label="Describe a meeting in plain words"
         />

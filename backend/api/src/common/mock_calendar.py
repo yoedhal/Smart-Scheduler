@@ -8,7 +8,7 @@ network, so a demo runs offline and looks the same on any day of the year —
 the weekly pattern is expanded relative to whatever week is being viewed.
 
 Storage:  PK=USER#<id>, SK=MOCKCAL
-  {"persona": "dana"}      → weekly pattern expanded from PERSONAS
+  {"persona": "jensen"}    → weekly pattern expanded from PERSONAS
   {"events": [...]}        → explicit events, used verbatim (start/end/summary)
 
 Seed with `python scripts/seed_demo_calendars.py`.
@@ -39,19 +39,19 @@ MAX_WINDOW_DAYS = 120
 # allDay:  (weekday, summary) — emitted as a midnight-to-midnight UTC block,
 #          which is what generate_slots treats as a blocked calendar date.
 #
-# The two personas are deliberately complementary: Dana's mornings are gone and
-# Omer's afternoons are gone, so the only clean overlap is the midday window.
+# The two personas are deliberately complementary: Jensen's mornings are gone
+# and Mark's afternoons are gone, so the only clean overlap is the midday window.
 # That gives a live demo something visible to say about every candidate slot.
 # ---------------------------------------------------------------------------
 
 PERSONAS: Dict[str, dict] = {
-    "dana": {
-        "displayName": "Dana Levi",
-        "email": "dana.levi@demo.smartscheduler.app",
-        "role": "Product Designer",
-        "department": "Design",
+    "jensen": {
+        "displayName": "Jensen Huang",
+        "email": "jensen.huang@demo.smartscheduler.app",
+        "role": "Hardware Engineer",
+        "department": "Hardware",
         "timezone": "Asia/Jerusalem",
-        "skills": ["Design systems", "User research", "Prototyping"],
+        "skills": ["Hardware design", "Research", "AI"],
         "statusMessage": "Mornings are packed",
         "weekly": [
             (0, "09:00", 30, "Design standup"),
@@ -63,19 +63,19 @@ PERSONAS: Dict[str, dict] = {
             (2, "10:00", 90, "Sprint planning"),
             (3, "10:30", 60, "1:1 with manager"),
             (4, "09:30", 90, "Design critique"),
-            # Shared with Omer — the one block where both are busy at once, so
+            # Shared with Mark — the one block where both are busy at once, so
             # the majority-conflict filter has something to remove.
             (1, "12:00", 60, "Company all-hands"),
         ],
         "allDay": [],
     },
-    "omer": {
-        "displayName": "Omer Katz",
-        "email": "omer.katz@demo.smartscheduler.app",
+    "mark": {
+        "displayName": "Mark Zuckerberg",
+        "email": "mark.zuckerberg@demo.smartscheduler.app",
         "role": "Backend Engineer",
-        "department": "Platform",
+        "department": "Software R&D",
         "timezone": "Asia/Jerusalem",
-        "skills": ["Distributed systems", "AWS", "Python"],
+        "skills": ["AI", "Vr", "Meta"],
         "statusMessage": "Afternoons are for meetings",
         "weekly": [
             (0, "13:00", 90, "Customer sync"),

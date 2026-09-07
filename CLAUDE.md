@@ -135,13 +135,13 @@ Key actions:
 ### Demo Mode (`src/handlers/api/demo.py` + `src/common/mock_calendar.py`)
 
 A per-user toggle (Settings → Calendars) that provisions two mock colleagues —
-`demo-dana` and `demo-omer` — as real users with synthetic calendars, so meeting
+`demo-jensen` and `demo-mark` — as real users with synthetic calendars, so meeting
 creation can be demoed without anyone connecting Google.
 
 - `mock_calendar.PERSONAS` holds each persona's weekly busy pattern in local time.
   It is expanded relative to the requested window at read time, so the calendars
-  are never stale. Dana's mornings and Omer's afternoons are blocked, they share
-  a Tuesday all-hands (the one majority conflict), and Omer has an all-day Friday.
+  are never stale. Jensen's mornings and Mark's afternoons are blocked, they share
+  a Tuesday all-hands (the one majority conflict), and Mark has an all-day Friday.
 - `calendar_client.get_user_busy_slots` falls back to `mock_calendar.get_mock_events`
   after Google and .ics, so mock busy blocks flow into `generate_slots`, the fairness
   engine and the AI scorer unchanged. It returns `[]` for users without a MOCKCAL record.
